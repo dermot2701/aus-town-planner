@@ -148,6 +148,17 @@ def inject_globals():
     }
 
 
+@app.after_request
+def _no_store_html(resp):
+    """Never cache rendered HTML. Several pages carry their JS/CSS inline in the
+    server-rendered HTML (e.g. the council's mdLite renderer); without this the
+    browser serves a cached page and runs stale inline scripts after a deploy.
+    Static assets keep their own caching."""
+    if resp.mimetype == "text/html":
+        resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
+
+
 # ── Gemini factory ────────────────────────────────────────────────────────────
 # Single source of truth for the model. gemini-2.5-flash only. Responses are
 # prose; always extract JSON via re.search(r'\{.*\}', text, re.DOTALL).
