@@ -130,6 +130,11 @@ is a separate platform whose wallet was empty, so it `1008`'d no matter the mode
 
 - `POST https://api.minimax.io/anthropic/v1/messages`
 - `Authorization: Bearer $MINIMAX_API_KEY`, `anthropic-version: 2023-06-01`
+- **`MM-API-Source: OpenClaw`** — attributes the request to the MiniMax **Coding
+  Plan**. Without it the call bills the empty pay-as-you-go wallet and returns
+  **`402 insufficient_balance (1008)`** even when the Coding Plan has quota. This
+  is the header OpenClaw sends; it's the difference between a working call and a
+  `1008`, independent of the key's plan.
 - body is Anthropic Messages: `{"model": "MiniMax-M2.1", "max_tokens": …, "messages": […]}`
 - response `content` is a list of blocks — concatenate the `type:"text"` ones
   (a reasoning model like `MiniMax-M2.5` also emits `thinking` blocks, which we skip)

@@ -245,12 +245,16 @@ def _council_query_minimax(prompt: str) -> str:
     # wallet that 1008'd). The portal serves the M2.1/M2.5 family (no "M2.7");
     # M2.1 is OpenClaw's default — fast and non-reasoning, so the answer is a
     # clean text block. Auth is a bearer token, schema is Anthropic Messages.
+    # MM-API-Source attributes the request to the MiniMax Coding Plan (the same
+    # header OpenClaw sends); without it the call bills the empty pay-as-you-go
+    # wallet and returns 402 insufficient_balance (1008).
     data = _http_post_json("https://api.minimax.io/anthropic/v1/messages", {
         "model": "MiniMax-M2.1",
         "max_tokens": 1536,
         "messages": [{"role": "user", "content": prompt}],
     }, {"Authorization": f"Bearer {MINIMAX_API_KEY}",
-        "anthropic-version": "2023-06-01"})
+        "anthropic-version": "2023-06-01",
+        "MM-API-Source": "OpenClaw"})
     # Anthropic Messages: content is a list of blocks; concatenate the text ones
     # (a reasoning model would also emit separate "thinking" blocks we skip).
     blocks = data.get("content") or []
