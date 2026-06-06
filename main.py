@@ -11,6 +11,7 @@ the review engine all live here. Live ingestion lives in ingest/.
 
 import os
 import re
+import time
 import json
 import math
 from datetime import datetime
@@ -429,6 +430,65 @@ def retrieve_passages(query, k=6, min_score=0.45):
     return [{**c, "_score": round(s, 3)} for s, c in scored[:k]]
 
 
+# ── Zone- and municipality-aware retrieval ─────────────────────────────────────
+# SPP zone numbers are fixed by statute. A question that names a zone must pull
+# THAT zone's clauses (Inner Residential = clause 9.x), never a look-alike standard
+# from another zone (e.g. Rural Living 11.x). Longest phrase wins so
+# "inner residential" beats the bare "residential" / "rural" substrings.
+_SPP_ZONES = {
+    "general residential": 8, "inner residential": 9, "low density residential": 10,
+    "rural living": 11, "village": 12, "urban mixed use": 13, "local business": 14,
+    "general business": 15, "central business": 16, "commercial": 17,
+    "light industrial": 18, "general industrial": 19, "rural": 20, "agriculture": 21,
+    "landscape conservation": 22, "environmental management": 23, "major tourism": 24,
+    "port and marine": 25, "utilities": 26, "community purpose": 27, "recreation": 28,
+    "open space": 29, "future urban": 30,
+}
+
+# The 29 LPS councils, so /ask can scope local provisions from a free-text question.
+_COUNCILS = [
+    "Brighton", "Tasman", "Derwent Valley", "George Town", "Burnie",
+    "Glamorgan Spring Bay", "Launceston", "Kingborough", "Central Coast",
+    "Northern Midlands", "Dorset", "Circular Head", "Flinders", "Latrobe",
+    "Glenorchy", "West Coast", "Sorell", "Central Highlands", "Clarence",
+    "Southern Midlands", "Huon Valley", "Devonport", "West Tamar", "Wynyard",
+    "Hobart", "Meander Valley", "Break O'Day", "Kentish", "King Island",
+]
+
+
+def _detect_zone(text):
+    """Return the SPP zone number named in text (longest phrase match), or None."""
+    t = (text or "").lower()
+    for phrase in sorted(_SPP_ZONES, key=len, reverse=True):
+        if re.search(r"\b" + re.escape(phrase) + r"\b", t):
+            return _SPP_ZONES[phrase]
+    return None
+
+
+def _detect_municipality(text):
+    """Return the council named in text, or None (used to scope LPS on /ask)."""
+    t = (text or "").lower()
+    for name in sorted(_COUNCILS, key=len, reverse=True):
+        if name.lower() in t:
+            return name
+    return None
+
+
+def _zone_bonus(chunk, zone_num):
+    """Strong boost for SPP clauses belonging to the queried zone (clause N.x)."""
+    if not zone_num:
+        return 0
+    return 6 if re.match(rf"^SPP {zone_num}(\.|\b)", chunk.get("clause_id", "")) else 0
+
+
+def _log(event, **fields):
+    """Structured stdout log line — Cloud Run captures stdout per line."""
+    try:
+        print(json.dumps({"event": event, **fields}, default=str), flush=True)
+    except Exception:
+        pass
+
+
 def retrieve(query, municipality=None, zone=None, use_class=None, k_scheme=8, k_decisions=4):
     """Return municipality-scoped scheme clauses + keyword-matched decisions.
 
@@ -441,6 +501,7 @@ def retrieve(query, municipality=None, zone=None, use_class=None, k_scheme=8, k_
     qtext = " ".join(str(x) for x in [query, zone, use_class] if x)
     qtokens = _tokens(qtext)
     muni = (municipality or "").strip().lower()
+    zone_num = _detect_zone(qtext)
 
     scheme = load_json("scheme_chunks.json").get("chunks", [])
     in_scope = []
@@ -448,9 +509,13 @@ def retrieve(query, municipality=None, zone=None, use_class=None, k_scheme=8, k_
         scope = (c.get("scope") or "").lower()
         if scope == "statewide" or (muni and scope == muni):
             in_scope.append(c)
-    scored = sorted(in_scope, key=lambda c: _score_chunk(qtokens, c), reverse=True)
+    # Score = keyword overlap + a strong bonus for clauses in the queried zone, so a
+    # zone-specific question surfaces that zone's standards over look-alikes elsewhere.
+    def scheme_score(c):
+        return _score_chunk(qtokens, c) + _zone_bonus(c, zone_num)
+    scored = sorted(in_scope, key=scheme_score, reverse=True)
     # Keep only chunks with at least one hit; if none hit, fall back to scope-only.
-    hits = [c for c in scored if _score_chunk(qtokens, c) > 0]
+    hits = [c for c in scored if scheme_score(c) > 0]
     scheme_out = (hits or scored)[:k_scheme]
 
     decisions = load_json("decisions.json").get("decisions", [])
@@ -727,6 +792,8 @@ _HOLLY_SYSTEM = (
     "Answer questions about the Tasmanian Planning Scheme, LUPAA, TASCAT decisions, and "
     "development assessment practice — but ONLY based on the CONTEXT supplied. "
     "Cite every claim to a clause ID or TASCAT citation from that context. "
+    "When a question names a zone, rely on that zone's clauses and state which zone each "
+    "cited clause governs; never apply a standard from a different zone. "
     "If the context is insufficient, say so clearly and explain what information is needed. "
     "Never invent clause numbers, standards, or case holdings. "
     "End every response with the caveat: '" + CAVEAT + "'"
@@ -766,7 +833,14 @@ def ask_holly():
     if request.method == "POST":
         question = request.form.get("question", "").strip()
         if question:
-            ctx = retrieve(query=question)
+            t0 = time.time()
+            muni = _detect_municipality(question)
+            ctx = retrieve(query=question, municipality=muni, k_scheme=12)
+            _log("ask.retrieve", question=question[:200], municipality=muni,
+                 zone=_detect_zone(question),
+                 scheme_clauses=[c.get("clause_id") for c in ctx["scheme"]],
+                 decisions=[d.get("citation") for d in ctx["decisions"]],
+                 passages=len(ctx.get("decision_passages") or []))
             model = _gemini_model(system=_HOLLY_SYSTEM)
             if model:
                 prompt = (
@@ -777,8 +851,10 @@ def ask_holly():
                 try:
                     resp = model.generate_content(prompt)
                     answer = resp.text.strip()
+                    _log("ask.answer", chars=len(answer), latency_s=round(time.time() - t0, 2))
                 except Exception as e:
                     error = f"Gemini error: {e}"
+                    _log("ask.error", error=str(e)[:300], latency_s=round(time.time() - t0, 2))
             else:
                 error = "No Gemini API key configured — Holly requires Gemini to answer questions."
     return render_template("ask.html", question=question, answer=answer, error=error,
