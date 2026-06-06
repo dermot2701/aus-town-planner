@@ -494,6 +494,45 @@ def api_review():
     return jsonify({"engine": engine, "result": result})
 
 
+_HOLLY_SYSTEM = (
+    "You are Holly, a Tasmanian planning specialist assistant embedded in TasPlan Review. "
+    "Answer questions about the Tasmanian Planning Scheme, LUPAA, TASCAT decisions, and "
+    "development assessment practice — but ONLY based on the CONTEXT supplied below. "
+    "Cite every claim to a clause ID or TASCAT citation from that context. "
+    "If the context is insufficient, say so clearly and explain what information is needed. "
+    "Never invent clause numbers, standards, or case holdings. "
+    "End every response with the caveat: '" + CAVEAT + "'"
+)
+
+
+@app.route("/ask", methods=["GET", "POST"])
+@login_required
+def ask_holly():
+    answer = None
+    question = ""
+    error = None
+    if request.method == "POST":
+        question = request.form.get("question", "").strip()
+        if question:
+            ctx = retrieve(query=question)
+            model = _gemini_model()
+            if model:
+                prompt = (
+                    f"{_HOLLY_SYSTEM}\n\n"
+                    f"CONTEXT:\n{_format_context(ctx)}\n\n"
+                    f"QUESTION: {question}"
+                )
+                try:
+                    resp = model.generate_content(prompt)
+                    answer = resp.text.strip()
+                except Exception as e:
+                    error = f"Gemini error: {e}"
+            else:
+                error = "No Gemini API key configured — Holly requires Gemini to answer questions."
+    return render_template("ask.html", question=question, answer=answer, error=error,
+                           gemini=bool(GEMINI_API_KEY))
+
+
 @app.route("/admin")
 @admin_required
 def admin():
