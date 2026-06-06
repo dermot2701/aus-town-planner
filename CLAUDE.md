@@ -26,7 +26,7 @@ returns a grounded, cited assessment.
 | Data | JSON in `data/` (local) or GCS when `GCS_BUCKET` is set. Access ONLY via `load_json`/`save_json` |
 | Auth | Session-based, Werkzeug hashing, `@login_required` / `@admin_required` |
 | AI | Google Gemini (`gemini-2.5-flash`) via `_gemini_model()`; degrades gracefully when no key |
-| Ingestion | `ingest/scheme.py`, `ingest/decisions.py` — network-gated, run as `python -m ingest.<name>` |
+| Ingestion | `ingest/scheme.py` (SPP), `ingest/lps.py` (LPS), `ingest/decisions.py`, `ingest/embed.py` — network-gated, run as `python -m ingest.<name>` |
 | Frontend | Jinja2 + Bootstrap 5 (layout only) + Palantir-dark design system (teal accent) |
 
 ## The review engine (main.py)
