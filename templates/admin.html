@@ -47,14 +47,134 @@ python -m ingest.decisions   # TASCAT → decisions.json</pre>
 </div>
 
 <div class="app-card app-card-padded mt-4">
-  <div class="app-card-header"><div class="app-section-title">Users</div></div>
+  <div class="app-card-header">
+    <div class="app-section-title">Users</div>
+    <button class="app-btn primary" data-modal-open="modal-add-user">+ Add user</button>
+  </div>
   <table class="app-table">
-    <thead><tr><th>Username</th><th>Name</th><th>Role</th></tr></thead>
+    <thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
     <tbody>
       {% for username, u in users.items() %}
-      <tr><td>{{ username }}</td><td>{{ u.name }}</td><td><span class="app-badge {{ 'info' if u.role == 'admin' else '' }}">{{ u.role }}</span></td></tr>
+      <tr>
+        <td style="font-family:var(--font-mono);font-size:12px">{{ username }}</td>
+        <td>{{ u.name }}</td>
+        <td style="font-size:12px;color:var(--text-faint)">{{ u.email }}</td>
+        <td><span class="app-badge {{ 'info' if u.role == 'admin' else '' }}">{{ u.role }}</span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="app-btn sm"
+            data-modal-open="modal-edit-user"
+            data-username="{{ username }}"
+            data-name="{{ u.name }}"
+            data-email="{{ u.email }}"
+            data-role="{{ u.role }}">Edit</button>
+          {% if username != current_user %}
+          <button class="app-btn sm danger" style="margin-left:4px"
+            data-modal-open="modal-delete-user"
+            data-username="{{ username }}">Delete</button>
+          {% endif %}
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+
+<!-- Add user modal -->
+<div class="modal-overlay" id="modal-add-user" role="dialog" aria-modal="true" aria-labelledby="modal-add-user-title">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-add-user-title">Add user</div>
+      <button class="modal-close" data-modal-close aria-label="Close">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin_user_add') }}">
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">Username</label><input class="app-input" name="username" required placeholder="e.g. jsmith"></div>
+        <div class="form-group"><label class="form-label">Full name</label><input class="app-input" name="name" placeholder="Jane Smith"></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="app-input" name="email" type="email" placeholder="jane@example.com"></div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="app-input" name="role">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Password</label><input class="app-input" name="password" type="password" required></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="app-btn" data-modal-close>Cancel</button>
+        <button type="submit" class="app-btn primary">Create user</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit user modal -->
+<div class="modal-overlay" id="modal-edit-user" role="dialog" aria-modal="true" aria-labelledby="modal-edit-user-title">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-edit-user-title">Edit user</div>
+      <button class="modal-close" data-modal-close aria-label="Close">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin_user_edit') }}">
+      <div class="modal-body">
+        <input type="hidden" name="username" id="edit-username">
+        <div class="form-group"><label class="form-label">Username</label><input class="app-input" id="edit-username-display" disabled></div>
+        <div class="form-group"><label class="form-label">Full name</label><input class="app-input" name="name" id="edit-name"></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="app-input" name="email" id="edit-email" type="email"></div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="app-input" name="role" id="edit-role">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">New password <span style="color:var(--text-faint)">(leave blank to keep current)</span></label><input class="app-input" name="password" type="password"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="app-btn" data-modal-close>Cancel</button>
+        <button type="submit" class="app-btn primary">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete user modal -->
+<div class="modal-overlay" id="modal-delete-user" role="dialog" aria-modal="true" aria-labelledby="modal-delete-user-title">
+  <div class="modal-box" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-delete-user-title">Delete user</div>
+      <button class="modal-close" data-modal-close aria-label="Close">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin_user_delete') }}">
+      <div class="modal-body">
+        <input type="hidden" name="username" id="delete-username">
+        <p style="font-size:13px;color:var(--text-secondary)">Delete user <strong id="delete-username-display"></strong>? This cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="app-btn" data-modal-close>Cancel</button>
+        <button type="submit" class="app-btn danger">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+document.querySelectorAll('[data-modal-open="modal-edit-user"]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('edit-username').value = btn.dataset.username;
+    document.getElementById('edit-username-display').value = btn.dataset.username;
+    document.getElementById('edit-name').value = btn.dataset.name;
+    document.getElementById('edit-email').value = btn.dataset.email;
+    document.getElementById('edit-role').value = btn.dataset.role;
+  });
+});
+document.querySelectorAll('[data-modal-open="modal-delete-user"]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('delete-username').value = btn.dataset.username;
+    document.getElementById('delete-username-display').textContent = btn.dataset.username;
+  });
+});
+</script>
+{% endblock %}
 {% endblock %}

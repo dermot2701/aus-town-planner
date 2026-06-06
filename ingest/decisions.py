@@ -13,7 +13,8 @@ use and robots.txt. Be a good citizen (and avoid an IP block):
     than crawling the whole site.
 
 Pipeline:
-  1. Discover case URLs from each tribunal's year-index pages (year range).
+  1. Discover case URLs from each tribunal's RSS feed (primary) or year-index
+     pages (fallback). Feed URL: www8.austlii.edu.au/cgi-bin/feed/au/cases/tas/{DB}/
   2. Fetch each case; cheaply pre-filter to planning/Resource & Planning matters
      by catchword (TASCAT carries many non-planning streams).
   3. For survivors, extract structured fields. With a Gemini key this is an
@@ -37,11 +38,18 @@ import html
 import json
 import argparse
 import datetime
+import xml.etree.ElementTree as ET
 from urllib.parse import urljoin
 
 from . import fetch, write_data
 
-AUSTLII_BASE = "https://www.austlii.edu.au"
+# AustLII migrated to www8.austlii.edu.au with cgi-bin paths.
+# www.austlii.edu.au year-index paths return 410 Gone.
+AUSTLII_BASE = "https://www8.austlii.edu.au"
+FEED_PATHS = {
+    "tascat": "/cgi-bin/feed/au/cases/tas/TASCAT/",
+    "rmpat": "/cgi-bin/feed/au/cases/tas/TASRMPAT/",
+}
 DB_PATHS = {
     "tascat": "/au/cases/tas/TASCAT/",
     "rmpat": "/au/cases/tas/TASRMPAT/",
@@ -64,6 +72,7 @@ OUTCOME_HINTS = {
 }
 
 _CASE_LINK_RE = re.compile(r'href="([^"]*?(\d+)\.html)"', re.IGNORECASE)
+_ATOM_NS = "http://www.w3.org/2005/Atom"
 
 
 def _strip_html(s):
@@ -83,11 +92,77 @@ def _gemini():
 
 # ── Discovery ─────────────────────────────────────────────────────────────────
 
+def _parse_feed(xml_text, db, year_from, year_to):
+    """Parse RSS or Atom feed, return [{citation, url, db}] filtered by year range."""
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as e:
+        print(f"[decisions] {db}: feed XML parse error ({e})")
+        return []
+
+    # RSS 2.0 items
+    items = root.findall(".//item")
+    # Atom entries
+    if not items:
+        items = root.findall(f".//{{{_ATOM_NS}}}entry")
+
+    out = []
+    for item in items:
+        # Get URL — RSS uses <link> text, Atom uses <link href="...">
+        link_el = item.find("link")
+        if link_el is not None:
+            link = (link_el.text or "").strip() or link_el.get("href", "")
+        else:
+            atom_link = item.find(f"{{{_ATOM_NS}}}link")
+            link = atom_link.get("href", "") if atom_link is not None else ""
+
+        if not link:
+            guid = item.find("guid")
+            link = guid.text.strip() if guid is not None else ""
+
+        if not link:
+            continue
+
+        year_m = re.search(r"/(\d{4})/", link)
+        if not year_m:
+            continue
+        year = int(year_m.group(1))
+        if year < year_from or year > year_to:
+            continue
+
+        num_m = re.search(r"/(\d+)\.html", link)
+        if not num_m:
+            continue
+
+        out.append({
+            "citation": f"[{year}] {DB_CITATION[db]} {num_m.group(1)}",
+            "url": link,
+            "db": db,
+        })
+    return out
+
+
 def discover(db, year_from, year_to):
-    """Return [{citation, url, db}] for one tribunal across a year range."""
+    """Return [{citation, url, db}] for one tribunal across a year range.
+
+    Primary: RSS feed at www8.austlii.edu.au/cgi-bin/feed/...
+    Fallback: year-based HTML index (may be unavailable on the new host).
+    """
+    feed_url = AUSTLII_BASE + FEED_PATHS[db]
+    try:
+        xml_text = fetch(feed_url)
+        out = _parse_feed(xml_text, db, year_from, year_to)
+        if out:
+            print(f"[decisions] {db} feed: {len(out)} cases ({year_from}–{year_to})")
+            return out
+        print(f"[decisions] {db} feed: no cases in range {year_from}–{year_to}, trying year index")
+    except Exception as e:
+        print(f"[decisions] {db}: feed unreachable ({e}), trying year index")
+
+    # Fallback: year-based HTML index
     out = []
     for year in range(year_from, year_to + 1):
-        index_url = urljoin(AUSTLII_BASE, f"{DB_PATHS[db]}{year}/")
+        index_url = AUSTLII_BASE + f"{DB_PATHS[db]}{year}/"
         try:
             index = fetch(index_url)
         except Exception as e:

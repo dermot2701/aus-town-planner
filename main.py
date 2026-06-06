@@ -506,6 +506,72 @@ def admin():
                            gemini=bool(GEMINI_API_KEY))
 
 
+@app.route("/admin/users/add", methods=["POST"])
+@admin_required
+def admin_user_add():
+    from werkzeug.security import generate_password_hash
+    username = request.form.get("username", "").strip().lower()
+    name = request.form.get("name", "").strip()
+    email = request.form.get("email", "").strip()
+    role = request.form.get("role", "user")
+    password = request.form.get("password", "").strip()
+    if not username or not password:
+        flash("Username and password are required.", "warning")
+        return redirect(url_for("admin"))
+    users = load_json("users.json")
+    if username in users:
+        flash(f"Username '{username}' already exists.", "warning")
+        return redirect(url_for("admin"))
+    users[username] = {
+        "name": name,
+        "email": email,
+        "role": role,
+        "password": generate_password_hash(password),
+        "created_at": datetime.now(TAS).isoformat(timespec="seconds"),
+    }
+    save_json("users.json", users)
+    flash(f"User '{username}' created.", "success")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/users/edit", methods=["POST"])
+@admin_required
+def admin_user_edit():
+    from werkzeug.security import generate_password_hash
+    username = request.form.get("username", "").strip().lower()
+    name = request.form.get("name", "").strip()
+    email = request.form.get("email", "").strip()
+    role = request.form.get("role", "user")
+    password = request.form.get("password", "").strip()
+    users = load_json("users.json")
+    if username not in users:
+        flash("User not found.", "warning")
+        return redirect(url_for("admin"))
+    users[username]["name"] = name
+    users[username]["email"] = email
+    users[username]["role"] = role
+    if password:
+        users[username]["password"] = generate_password_hash(password)
+    save_json("users.json", users)
+    flash(f"User '{username}' updated.", "success")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/users/delete", methods=["POST"])
+@admin_required
+def admin_user_delete():
+    username = request.form.get("username", "").strip().lower()
+    if username == session.get("user"):
+        flash("Cannot delete your own account.", "warning")
+        return redirect(url_for("admin"))
+    users = load_json("users.json")
+    if username in users:
+        del users[username]
+        save_json("users.json", users)
+        flash(f"User '{username}' deleted.", "success")
+    return redirect(url_for("admin"))
+
+
 @app.errorhandler(403)
 def err_403(e):
     return render_template("error.html", code=403, message="Forbidden"), 403
