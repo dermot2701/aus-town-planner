@@ -51,8 +51,8 @@ FEED_PATHS = {
     "rmpat": "/cgi-bin/feed/au/cases/tas/TASRMPAT/",
 }
 DB_PATHS = {
-    "tascat": "/au/cases/tas/TASCAT/",
-    "rmpat": "/au/cases/tas/TASRMPAT/",
+    "tascat": "/cgi-bin/viewtoc/au/cases/tas/TASCAT/",
+    "rmpat": "/cgi-bin/viewtoc/au/cases/tas/TASRMPAT/",
 }
 DB_CITATION = {"tascat": "TASCAT", "rmpat": "TASRMPAT"}
 
