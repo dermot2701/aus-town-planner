@@ -174,12 +174,26 @@ _GEMINI_SYSTEM = (
 )
 
 
-def _gemini_model():
+def _gemini_model(system=None):
+    """Single Gemini factory. Defaults to the review system instruction.
+    Pass system='holly', 'caselaw', or a string to use a different system prompt."""
     if not GEMINI_API_KEY:
         return None
     import google.generativeai as genai
     genai.configure(api_key=GEMINI_API_KEY)
-    return genai.GenerativeModel("gemini-2.5-flash", system_instruction=_GEMINI_SYSTEM)
+    instruction = _GEMINI_SYSTEM if system is None else (system or None)
+    kwargs = {"system_instruction": instruction} if instruction else {}
+    return genai.GenerativeModel("gemini-2.5-flash", **kwargs)
+
+
+def _skills_context():
+    """Return a compact skills-framework string for inclusion in Gemini prompts."""
+    data = load_json("skills.json")
+    lines = ["Planner competency framework (audience context):"]
+    for s in data.get("skills", []):
+        titles = ", ".join(c["title"] for c in s.get("competencies", []))
+        lines.append(f"  {s['number']}. {s['title']}: {titles}.")
+    return "\n".join(lines)
 
 
 # ── Retrieval ─────────────────────────────────────────────────────────────────
@@ -496,12 +510,31 @@ def api_review():
 
 _HOLLY_SYSTEM = (
     "You are Holly, a Tasmanian planning specialist assistant embedded in TasPlan Review. "
+    "Your audience is qualified statutory planners with competencies in scheme interpretation, "
+    "development assessment, conditions drafting, referral management, and LUPAA procedure. "
     "Answer questions about the Tasmanian Planning Scheme, LUPAA, TASCAT decisions, and "
-    "development assessment practice — but ONLY based on the CONTEXT supplied below. "
+    "development assessment practice — but ONLY based on the CONTEXT supplied. "
     "Cite every claim to a clause ID or TASCAT citation from that context. "
     "If the context is insufficient, say so clearly and explain what information is needed. "
     "Never invent clause numbers, standards, or case holdings. "
     "End every response with the caveat: '" + CAVEAT + "'"
+)
+
+_CASELAW_SYSTEM = (
+    "You are a Tasmanian planning law analyst. Analyse a planning tribunal decision and "
+    "return a SINGLE JSON object with exactly these keys: "
+    "case_name (string), citation (string), date (string), jurisdiction (string), "
+    "primary_subject (string), decision_outcome (one of: Upheld|Set aside|Modified|Refused|Permit granted|Remitted), "
+    "executive_summary ({core_issue, key_takeaway}), "
+    "statutory_framework ({relevant_act, planning_scheme_zone, overlays}), "
+    "factual_background ({proposal, authority_decision, grounds_for_appeal}), "
+    "tribunal_findings ({scheme_interpretation, discretionary_powers, public_interests}), "
+    "precedent ({test_applied, local_application}), "
+    "implications ({for_applicants, for_authorities}), "
+    "status ({appeal_window, recommended_actions}). "
+    "Ground every field in the decision text supplied. If a field cannot be determined, use null. "
+    "Focus on LUPAA, the Tasmanian Planning Scheme, and TASCAT/TASRMPAT procedure. "
+    "Return JSON only — no prose outside the object."
 )
 
 
@@ -522,11 +555,11 @@ def ask_holly():
         question = request.form.get("question", "").strip()
         if question:
             ctx = retrieve(query=question)
-            model = _gemini_model()
+            model = _gemini_model(system=_HOLLY_SYSTEM)
             if model:
                 prompt = (
-                    f"{_HOLLY_SYSTEM}\n\n"
-                    f"CONTEXT:\n{_format_context(ctx)}\n\n"
+                    f"{_skills_context()}\n\n"
+                    f"CONTEXT (scheme clauses and decisions — cite only these):\n{_format_context(ctx)}\n\n"
                     f"QUESTION: {question}"
                 )
                 try:
@@ -538,6 +571,40 @@ def ask_holly():
                 error = "No Gemini API key configured — Holly requires Gemini to answer questions."
     return render_template("ask.html", question=question, answer=answer, error=error,
                            gemini=bool(GEMINI_API_KEY))
+
+
+@app.route("/caselaw", methods=["GET", "POST"])
+@login_required
+def caselaw():
+    review = None
+    citation = ""
+    case_text = ""
+    error = None
+    if request.method == "POST":
+        citation = request.form.get("citation", "").strip()
+        case_text = request.form.get("case_text", "").strip()
+        if not case_text:
+            flash("Paste the decision text to analyse.", "warning")
+        else:
+            model = _gemini_model(system=_CASELAW_SYSTEM)
+            if model:
+                header = f"Citation: {citation}\n\n" if citation else ""
+                prompt = (
+                    f"{_skills_context()}\n\n"
+                    f"DECISION TEXT:\n{header}{case_text[:20000]}"
+                )
+                try:
+                    resp = model.generate_content(prompt)
+                    match = re.search(r"\{.*\}", resp.text.strip(), re.DOTALL)
+                    review = json.loads(match.group() if match else resp.text)
+                    if citation and not review.get("citation"):
+                        review["citation"] = citation
+                except Exception as e:
+                    error = f"Analysis failed: {e}"
+            else:
+                error = "No Gemini API key configured — case analysis requires Gemini."
+    return render_template("caselaw.html", review=review, citation=citation,
+                           case_text=case_text, error=error, gemini=bool(GEMINI_API_KEY))
 
 
 @app.route("/admin")
