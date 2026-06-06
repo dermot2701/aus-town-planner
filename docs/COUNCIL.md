@@ -172,9 +172,19 @@ width, truncating long opinions. Output boxes are generous (`.stage-body`
 `max-height:70vh`, `.council-final` `max-height:80vh`) so answers rarely need
 inner scrolling.
 
-**Token ceilings.** So answers aren't cut off server-side: Gemini
-`maxOutputTokens` 2048, Groq/MiniMax `max_tokens` 1536. Bump these if you see
-genuinely truncated output (as opposed to a too-small box).
+**Token ceilings & Gemini thinking.** So answers aren't cut off server-side:
+Gemini `maxOutputTokens` 4096, Groq/MiniMax `max_tokens` 1536. **`gemini-2.5-flash`
+is a thinking model and its reasoning tokens count against `maxOutputTokens`** — if
+thinking is left on, it can consume the budget and truncate the visible answer
+mid-sentence. The council disables it with `generationConfig.thinkingConfig.thinkingBudget = 0`,
+so the whole budget goes to the answer. The Gemini parser joins all text parts and
+raises with `finishReason` if there are none.
+
+**Markdown rendering.** Members emit markdown (`**bold**`, headings, bullets). The
+client renders it with `mdLite()` — which **escapes HTML first**, then adds only its
+own `<strong>`/bullet markup, so model output can't inject HTML. Line breaks and
+indentation are preserved by `white-space:pre-wrap`. Without this the boxes showed
+raw `**` and `*` markers.
 
 **SSE event types** (server `yield sse({...})` → client `handle(ev)`):
 

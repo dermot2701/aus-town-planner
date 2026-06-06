@@ -224,9 +224,19 @@ def _council_query_gemini(prompt: str) -> str:
     )
     data = _http_post_json(url, {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.7},
+        # gemini-2.5-flash is a thinking model and its reasoning tokens count
+        # against maxOutputTokens — leaving thinking on truncated the visible
+        # answer mid-sentence. Disable thinking and give the whole budget to the
+        # answer (synthesis of already-reasoned opinions doesn't need it).
+        "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.7,
+                             "thinkingConfig": {"thinkingBudget": 0}},
     }, {})
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    cand = (data.get("candidates") or [{}])[0]
+    parts = (cand.get("content") or {}).get("parts") or []
+    text = "".join(p.get("text", "") for p in parts)
+    if text.strip():
+        return text
+    raise RuntimeError(f"Gemini returned no text (finishReason={cand.get('finishReason')})")
 
 
 def _council_query_groq(prompt: str) -> str:
