@@ -195,9 +195,19 @@ def _http_post_json(url: str, payload: dict, headers: dict, timeout: int = 60) -
     body (providers explain *why* a 4xx happened there) instead of a bare code."""
     import urllib.request
     import urllib.error
+    # Some provider APIs (Groq) sit behind Cloudflare, which 403s the default
+    # "Python-urllib/x.y" agent as a bot (Cloudflare error 1010 — banned browser
+    # signature). Send a normal browser UA so the request reaches the provider.
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode(),
-        headers={**headers, "Content-Type": "application/json"})
+        headers={
+            "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/125.0.0.0 Safari/537.36"),
+            "Accept": "application/json",
+            **headers,
+            "Content-Type": "application/json",
+        })
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read())

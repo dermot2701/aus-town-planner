@@ -177,7 +177,9 @@ input, select, textarea { font-family: var(--font-sans); }
 /* ── Main content ───────────────────────────────────────────────────────── */
 .app-main {
   grid-area: main;
-  margin-left: var(--sidebar-w);
+  /* The shell grid already reserves a sidebar-width column; the fixed sidebar
+     overlays it and content sits in column 2. No extra margin-left — that would
+     double the offset and leave an empty band between the sidebar and content. */
   padding: 28px;
   min-height: calc(100vh - var(--topbar-h));
   background: var(--bg);
@@ -801,7 +803,6 @@ input, select, textarea { font-family: var(--font-sans); }
 /* ── News Ticker ─────────────────────────────────────────────────────────── */
 .news-ticker {
   grid-area: ticker;
-  margin-left: var(--sidebar-w);
   height: 28px;
   display: flex;
   align-items: center;
