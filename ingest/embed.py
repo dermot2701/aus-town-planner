@@ -32,10 +32,31 @@ CHUNK_CHARS = 3500      # ~1000 tokens
 OVERLAP_CHARS = 300
 
 
+EMBED_THROTTLE = 0.4      # seconds between embedding calls (free-tier RPM headroom)
+EMBED_RETRIES = 4         # retries on transient/rate-limit errors
+
+
 def _embed(text):
-    """Embed one chunk as a document. Returns vector or None."""
+    """Embed one chunk as a document, with throttle + backoff on rate limits.
+    Returns vector or None after exhausting retries."""
+    import time
     from main import _embed_text
-    return _embed_text(text, task_type="RETRIEVAL_DOCUMENT")
+    delay = 2.0
+    for attempt in range(EMBED_RETRIES + 1):
+        try:
+            vec = _embed_text(text, task_type="RETRIEVAL_DOCUMENT", raise_on_error=True)
+            time.sleep(EMBED_THROTTLE)
+            return vec
+        except Exception as e:
+            msg = str(e)
+            transient = "429" in msg or "RESOURCE_EXHAUSTED" in msg or "500" in msg or "503" in msg
+            if attempt < EMBED_RETRIES and transient:
+                print(f"[embed]   rate-limited, retrying in {delay:.0f}s...")
+                time.sleep(delay)
+                delay *= 2
+                continue
+            print(f"[embed]   embed error: {msg[:160]}")
+            return None
 
 
 def _list_embedding_models():
