@@ -159,7 +159,7 @@ MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY")
 _COUNCIL_MODELS = {
     "gemini":  {"label": "Gemini 2.5 Flash",     "chairman": True},
     "groq":    {"label": "Llama 3.3 70B (Groq)", "chairman": False},
-    "minimax": {"label": "MiniMax-01",            "chairman": False},
+    "minimax": {"label": "MiniMax M2.7",          "chairman": False},
 }
 
 _COUNCIL_MEMBER_SYSTEM = (
@@ -240,7 +240,10 @@ def _council_query_groq(prompt: str) -> str:
 
 def _council_query_minimax(prompt: str) -> str:
     data = _http_post_json("https://api.minimaxi.chat/v1/text/chatcompletion_v2", {
-        "model": "MiniMax-Text-01",
+        # MiniMax-Text-01 is the legacy model and isn't covered by the Plus plan
+        # (which covers the M-series) — it bills to the pay-as-you-go credit
+        # balance and 1008s when that's empty. Use a current, plan-covered model.
+        "model": "MiniMax-M2.7",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 1024,
         "temperature": 0.7,
