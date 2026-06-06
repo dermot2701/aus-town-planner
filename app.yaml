@@ -22,16 +22,3 @@ automatic_scaling:
   min_instances: 0
   max_instances: 5
   target_cpu_utilization: 0.65
-
-steps:
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - app
-      - deploy
-      - app.yaml
-      - --quiet
-      - --project=$PROJECT_ID
-
-options:
-  logging: CLOUD_LOGGING_ONLY
