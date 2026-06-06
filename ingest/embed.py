@@ -38,6 +38,22 @@ def _embed(text):
     return _embed_text(text, task_type="RETRIEVAL_DOCUMENT")
 
 
+def _preflight():
+    """Do one embedding call up front; raise with the real cause if it fails.
+    Catches a missing key, an invalid key, or a wrong endpoint before we churn
+    through hundreds of chunks."""
+    from main import _embed_text, EMBED_MODEL, GEMINI_API_KEY
+    if not GEMINI_API_KEY:
+        raise SystemExit(
+            "[embed] GEMINI_API_KEY is not set. Run with:\n"
+            "    GEMINI_API_KEY=your-key ./venv/bin/python -m ingest.embed")
+    try:
+        vec = _embed_text("preflight check", task_type="RETRIEVAL_DOCUMENT", raise_on_error=True)
+    except Exception as e:
+        raise SystemExit(f"[embed] embedding API call failed ({EMBED_MODEL}): {e}")
+    print(f"[embed] preflight OK — {EMBED_MODEL} returned a {len(vec)}-dim vector")
+
+
 def chunk_text(text):
     """Split into overlapping ~CHUNK_CHARS windows on whitespace boundaries."""
     text = re.sub(r"\s+", " ", text).strip()
@@ -83,6 +99,8 @@ def main():
                     help="embed every case in decisions.json instead of just the seed list")
     ap.add_argument("--limit", type=int, default=100, help="max cases to embed")
     args = ap.parse_args()
+
+    _preflight()
 
     records = (_records_from_decisions(args.limit) if args.all
                else _seed_records(SEED_CITATIONS)[: args.limit])

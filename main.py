@@ -355,13 +355,19 @@ def _score_chunk(query_tokens, chunk):
 EMBED_MODEL = "text-embedding-004"
 
 
-def _embed_text(text, task_type="RETRIEVAL_QUERY"):
+def _embed_text(text, task_type="RETRIEVAL_QUERY", raise_on_error=False):
     """Embed text via Gemini's free embedding endpoint. Returns a vector, or
     None when no key is set or the call fails. Same urllib pattern as the
-    council helpers — no SDK dependency."""
+    council helpers — no SDK dependency.
+
+    The app path swallows errors (returns None) so retrieval degrades gracefully.
+    The ingest path passes raise_on_error=True to surface the real cause."""
     if not GEMINI_API_KEY:
+        if raise_on_error:
+            raise RuntimeError("GEMINI_API_KEY is not set in this process's environment")
         return None
     import urllib.request
+    import urllib.error
     payload = json.dumps({
         "model": f"models/{EMBED_MODEL}",
         "content": {"parts": [{"text": text[:8000]}]},
@@ -376,7 +382,14 @@ def _embed_text(text, task_type="RETRIEVAL_QUERY"):
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read())
         return data["embedding"]["values"]
+    except urllib.error.HTTPError as e:
+        if raise_on_error:
+            body = e.read().decode("utf-8", "replace")[:400]
+            raise RuntimeError(f"HTTP {e.code} from embedding API: {body}") from None
+        return None
     except Exception:
+        if raise_on_error:
+            raise
         return None
 
 
