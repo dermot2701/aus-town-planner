@@ -68,6 +68,7 @@
   .stage-body { background:var(--bg); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:16px; font-size:13.5px; color:var(--text-secondary); line-height:1.75; white-space:pre-wrap; max-height:70vh; overflow-y:auto; word-break:break-word }
   .stage-loading { font-size:13px; color:var(--text-faint); font-style:italic; text-align:center; padding:24px 0 }
   .council-final { background:var(--bg); border:1px solid var(--accent); border-radius:var(--radius-md); padding:18px; font-size:14px; color:var(--text-secondary); line-height:1.8; white-space:pre-wrap; max-height:80vh; overflow-y:auto }
+  .stage-body hr.md-rule, .council-final hr.md-rule { border:none; border-top:1px solid var(--border-subtle); margin:10px 0 }
 </style>
 
 <script>
@@ -205,6 +206,7 @@ function escHtml(s) {
 // bullet markers; line breaks/indentation are preserved by white-space:pre-wrap.
 function mdLite(s) {
   let t = escHtml(s);
+  t = t.replace(/^\s*([-*_])\1{2,}\s*$/gm, '<hr class="md-rule">'); // --- *** ___ → divider
   t = t.replace(/^#{1,6}\s+(.*)$/gm, '<strong>$1</strong>');   // headings → bold line
   t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');  // **bold**
   t = t.replace(/^(\s*)[\*\-]\s+/gm, '$1• ');                  // -/* bullets → •
