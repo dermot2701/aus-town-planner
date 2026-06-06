@@ -20,8 +20,17 @@ import urllib.request
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-USER_AGENT = "TasPlanReview/0.1 (planning research; contact: set ADMIN_EMAIL)"
 THROTTLE_SECONDS = 2.0
+
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-AU,en;q=0.9",
+}
 
 
 def fetch(url, binary=False):
@@ -33,7 +42,7 @@ def fetch(url, binary=False):
         mode = "rb" if binary else "r"
         with open(path, mode) as f:
             return f.read()
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    req = urllib.request.Request(url, headers=_HEADERS)
     with urllib.request.urlopen(req, timeout=60) as resp:
         data = resp.read()
     if not binary:
