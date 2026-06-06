@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block breadcrumb %}Home{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1 class="page-title">TasPlan Review</h1>
+  <p class="page-sub">Good {{ 'morning' if now.hour < 12 else ('afternoon' if now.hour < 17 else 'evening') }}, {{ current_name }}. Analytical decision-support for Tasmanian planning assessment.</p>
+</header>
+
+<div class="kpi-strip" role="region" aria-label="Corpus metrics">
+  <a href="{{ url_for('scheme') }}" class="kpi-card kpi-blue clickable">
+    <div class="kpi-label">Scheme clauses</div>
+    <div class="kpi-primary mono">{{ scheme_count }}</div>
+    <div class="kpi-delta">SPP + LPS (sample)</div>
+  </a>
+  <a href="{{ url_for('decisions') }}" class="kpi-card clickable">
+    <div class="kpi-label">TASCAT decisions</div>
+    <div class="kpi-primary mono">{{ decision_count }}</div>
+    <div class="kpi-delta">Indexed (sample)</div>
+  </a>
+  <a href="{{ url_for('review') }}" class="kpi-card kpi-green clickable">
+    <div class="kpi-label">Assessment engine</div>
+    <div class="kpi-primary mono">Ready</div>
+    <div class="kpi-delta">Grounded · cited</div>
+  </a>
+</div>
+
+<div class="section-divider">Start here</div>
+<div class="launch-grid">
+  <a href="{{ url_for('review') }}" class="launch-card" style="--lc-accent:var(--accent);--lc-icon-bg:var(--accent-bg)">
+    <div class="lc-icon">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    </div>
+    <div class="lc-label">Review a Proposal</div>
+    <div class="lc-desc">Submit a development proposal and receive a cited, zone-correct assessment against the scheme and tribunal precedent.</div>
+    <div class="lc-meta">Grounded JSON · every claim traceable</div>
+  </a>
+  <a href="{{ url_for('scheme') }}" class="launch-card" style="--lc-accent:#a78bfa;--lc-icon-bg:rgba(167,139,250,.1)">
+    <div class="lc-icon" style="background:rgba(167,139,250,.1)">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:#a78bfa"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+    </div>
+    <div class="lc-label">Planning Scheme</div>
+    <div class="lc-desc">Browse and search the ingested SPP and LPS clauses by municipality, zone, and code.</div>
+    <div class="lc-meta">{{ scheme_count }} clauses</div>
+  </a>
+  <a href="{{ url_for('decisions') }}" class="launch-card" style="--lc-accent:var(--warning);--lc-icon-bg:var(--warning-bg)">
+    <div class="lc-icon" style="background:var(--warning-bg)">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    </div>
+    <div class="lc-label">TASCAT Decisions</div>
+    <div class="lc-desc">Keyword-search Resource & Planning tribunal decisions with outcomes and the principle relied on.</div>
+    <div class="lc-meta">{{ decision_count }} decisions</div>
+  </a>
+</div>
+
+<div class="grid-2 mt-4">
+  <div class="app-card app-card-padded">
+    <div class="app-card-header"><div class="app-section-title">How a review is grounded</div></div>
+    <ul style="font-size:13px;color:var(--text-secondary);line-height:1.7;padding-left:18px;margin:0">
+      <li>Retrieval is scoped to the proposal's municipality (LPS) plus statewide SPP.</li>
+      <li>Every finding cites a supplied clause ID or a TASCAT citation — nothing is invented.</li>
+      <li>Where context is insufficient, the review says so and lists what is needed.</li>
+      <li>Output is a single structured JSON object, assessed Acceptable Solution first, then Performance Criterion.</li>
+    </ul>
+  </div>
+  <div class="app-card app-card-padded">
+    <div class="app-card-header"><div class="app-section-title">Scope &amp; caveat</div></div>
+    <p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin:0">
+      {{ caveat }} TasPlan Review supports qualified planners; it does not make determinations.
+      The current corpus is <strong>illustrative SAMPLE data</strong> pending live ingestion of the
+      Tasmanian Planning Scheme (TPSO) and TASCAT decisions (AustLII).
+    </p>
+  </div>
+</div>
+{% endblock %}

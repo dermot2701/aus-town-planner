@@ -1,0 +1,12 @@
+{
+  "provenance": "SAMPLE",
+  "generated_at": null,
+  "note": "Illustrative sample manifest. Real ingestion (ingest/scheme.py) will overwrite this with downloaded SPP + LPS provenance once outbound access to tpso.planning.tas.gov.au is enabled.",
+  "sources": [
+    {"name": "State Planning Provisions (SPP)", "url": "https://www.tpso.planning.tas.gov.au/", "fetched": false},
+    {"name": "Local Provisions Schedules (LPS)", "url": "https://www.tpso.planning.tas.gov.au/", "fetched": false}
+  ],
+  "municipalities_covered": ["statewide (SPP)", "Hobart", "Glamorgan-Spring Bay", "Kingborough"],
+  "chunk_count": 15,
+  "instruments": ["SPP", "LPS"]
+}

@@ -1,0 +1,49 @@
+{
+  "_README": "ILLUSTRATIVE SAMPLE decisions — NOT real TASCAT decisions. Citations are suffixed '(SAMPLE)' and provenance is 'SAMPLE'. Replace via ingest/decisions.py once outbound access to austlii.edu.au / tascat.tas.gov.au is enabled.",
+  "decisions": [
+    {
+      "citation": "[2025] TASCAT 14 (SAMPLE)",
+      "title": "Applicant v Hobart City Council (SAMPLE)",
+      "municipality": "Hobart",
+      "use_classes": ["Visitor accommodation"],
+      "keywords": ["visitor accommodation", "short stay", "amenity", "general residential", "noise", "discretionary"],
+      "summary": "SAMPLE (paraphrased): Review of refusal of a discretionary visitor accommodation use in the General Residential Zone. The Tribunal weighed residential amenity (noise, traffic, transient occupancy) against the zone purpose.",
+      "outcome": "affirmed (refusal upheld)",
+      "principle": "SAMPLE (paraphrased): In a residential zone, a discretionary visitor-accommodation use must demonstrate it will not unreasonably erode the residential amenity and character the zone exists to protect; unmanaged transient occupancy can justify refusal.",
+      "provenance": "SAMPLE"
+    },
+    {
+      "citation": "[2024] TASCAT 132 (SAMPLE)",
+      "title": "Applicant v Kingborough Council (SAMPLE)",
+      "municipality": "Kingborough",
+      "use_classes": ["Residential"],
+      "keywords": ["bushfire", "hazard management plan", "defendable space", "dwelling", "access", "water supply"],
+      "summary": "SAMPLE (paraphrased): Review concerning the adequacy of a bushfire hazard management plan for a single dwelling on a bushfire-prone lot. The accredited person's revised plan addressed defendable space, access width and static water supply.",
+      "outcome": "set aside (permit granted with conditions)",
+      "principle": "SAMPLE (paraphrased): A performance-based bushfire outcome can be accepted where a certified hazard management plan demonstrates tolerable risk; conditions securing the hazard management area and water supply are appropriate.",
+      "provenance": "SAMPLE"
+    },
+    {
+      "citation": "[2026] TASCAT 7 (SAMPLE)",
+      "title": "Applicant v Hobart City Council (SAMPLE)",
+      "municipality": "Hobart",
+      "use_classes": ["Residential"],
+      "keywords": ["building height", "overshadowing", "streetscape", "performance criterion", "amenity", "scenic", "skyline"],
+      "summary": "SAMPLE (paraphrased): Review of a dwelling exceeding the acceptable-solution height. Shadow diagrams and a streetscape analysis were assessed against the performance criterion, including a scenic skyline specific area plan.",
+      "outcome": "varied (approved with reduced upper level)",
+      "principle": "SAMPLE (paraphrased): Exceeding the acceptable height is permissible only where merit evidence (shadow diagrams, streetscape and view analysis) shows the performance criterion for amenity and scenic protection is met.",
+      "provenance": "SAMPLE"
+    },
+    {
+      "citation": "[2025] TASCAT 88 (SAMPLE)",
+      "title": "Applicant v Glamorgan-Spring Bay Council (SAMPLE)",
+      "municipality": "Glamorgan-Spring Bay",
+      "use_classes": ["Residential", "Visitor accommodation"],
+      "keywords": ["coastal", "erosion", "inundation", "hazard report", "foreshore", "setback", "design life"],
+      "summary": "SAMPLE (paraphrased): Review of a refusal for development within a coastal erosion / inundation hazard band on the east coast. The coastal hazard report did not establish tolerable risk over the development's design life.",
+      "outcome": "affirmed (refusal upheld)",
+      "principle": "SAMPLE (paraphrased): Within a mapped coastal hazard band, the onus is on the applicant to demonstrate tolerable risk for the design life; an inadequate coastal hazard report will sustain a refusal.",
+      "provenance": "SAMPLE"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Sign In — TasPlan Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <script src="{{ url_for('static', filename='js/ui.js') }}" defer></script>
+</head>
+<body class="app theme-dark">
+
+<main class="login-page" id="main-content">
+  <div class="login-grid-bg" aria-hidden="true"></div>
+  <div class="login-glow" aria-hidden="true"></div>
+
+  <div class="login-box">
+    <header class="login-header">
+      <div style="font-weight:800;font-size:22px;letter-spacing:.03em;color:var(--text-heading)">TasPlan<span style="color:var(--accent)"> Review</span></div>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:6px">Tasmanian planning assessment — analytical aid</p>
+      <h1 class="login-title" style="margin-top:18px">Sign In</h1>
+    </header>
+
+    {% if error %}
+    <div class="app-alert danger" role="alert" style="margin-bottom:20px">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('login') }}" novalidate>
+      <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+      <div class="form-group">
+        <label class="form-label" for="username">Username <span class="sr-only">(required)</span></label>
+        <input class="app-input" type="text" id="username" name="username" autocomplete="username" autofocus required placeholder="Enter your username">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="password">Password <span class="sr-only">(required)</span></label>
+        <input class="app-input" type="password" id="password" name="password" autocomplete="current-password" required placeholder="Enter your password">
+      </div>
+      <button type="submit" class="app-btn primary lg w-full" style="justify-content:center;margin-top:8px">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Sign In
+      </button>
+    </form>
+
+    <footer class="login-footer">
+      <p>Authorised personnel only &copy; {{ now.year }}</p>
+    </footer>
+  </div>
+</main>
+
+</body>
+</html>

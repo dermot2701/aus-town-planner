@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block breadcrumb %}Admin / Ingestion{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1 class="page-title">Admin / Ingestion</h1>
+  <p class="page-sub">Corpus status and ingestion controls.</p>
+</header>
+
+<div class="kpi-strip" role="region" aria-label="Corpus status">
+  <div class="kpi-card"><div class="kpi-label">Corpus status</div><div class="kpi-primary mono" style="color:var(--warning)">{{ manifest.get('provenance', 'unknown') }}</div><div class="kpi-delta">Provenance</div></div>
+  <div class="kpi-card"><div class="kpi-label">Scheme clauses</div><div class="kpi-primary mono">{{ scheme_count }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">TASCAT decisions</div><div class="kpi-primary mono">{{ decision_count }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Gemini key</div><div class="kpi-primary mono" style="color:{{ 'var(--success)' if gemini else 'var(--text-faint)' }}">{{ 'set' if gemini else 'unset' }}</div></div>
+</div>
+
+<div class="grid-2 mt-4">
+  <div class="app-card app-card-padded">
+    <div class="app-card-header"><div class="app-section-title">Ingestion</div></div>
+    <p style="font-size:13px;color:var(--text-secondary);line-height:1.6">
+      Live ingestion is performed by the standalone scripts below. They require outbound
+      network access to <code>tpso.planning.tas.gov.au</code>, <code>austlii.edu.au</code>,
+      and <code>tascat.tas.gov.au</code> — confirm the environment network policy allows
+      these before running.
+    </p>
+    <pre style="background:var(--bg);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:12px;font-size:12px;color:var(--text-secondary)">python -m ingest.scheme      # SPP + LPS → scheme_chunks.json
+python -m ingest.decisions   # TASCAT → decisions.json</pre>
+    <div class="app-alert warning" style="margin-top:10px">
+      Current corpus is <strong>SAMPLE</strong> data. {{ manifest.get('note', '') }}
+    </div>
+  </div>
+
+  <div class="app-card app-card-padded">
+    <div class="app-card-header"><div class="app-section-title">Source manifest</div></div>
+    <table class="app-table">
+      <thead><tr><th>Source</th><th>Fetched</th></tr></thead>
+      <tbody>
+        {% for s in manifest.get('sources', []) %}
+        <tr><td>{{ s.name }}<div style="font-size:11px;color:var(--text-faint)">{{ s.url }}</div></td>
+            <td><span class="app-badge {{ 'success' if s.fetched else 'danger' }}">{{ 'yes' if s.fetched else 'no' }}</span></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="font-size:12px;color:var(--text-faint);margin-top:8px">Municipalities: {{ manifest.get('municipalities_covered', []) | join(', ') }}</div>
+  </div>
+</div>
+
+<div class="app-card app-card-padded mt-4">
+  <div class="app-card-header"><div class="app-section-title">Users</div></div>
+  <table class="app-table">
+    <thead><tr><th>Username</th><th>Name</th><th>Role</th></tr></thead>
+    <tbody>
+      {% for username, u in users.items() %}
+      <tr><td>{{ username }}</td><td>{{ u.name }}</td><td><span class="app-badge {{ 'info' if u.role == 'admin' else '' }}">{{ u.role }}</span></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

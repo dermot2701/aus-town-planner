@@ -1,0 +1,174 @@
+/* ─── TasPlan Review — Design Tokens ──────────────────────────────────── */
+/* Palantir-dark system inherited from the Will scaffold; accent retuned to  */
+/* a planning teal. Immediate theme apply runs in ui.js to prevent flash.    */
+
+:root { color-scheme: light dark; }
+
+/* ── Shared structure tokens (theme-independent) ── */
+body.app {
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:  10px;
+  --radius-xl:  14px;
+  --font-sans:  "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:  "JetBrains Mono", "Fira Code", monospace;
+  --sidebar-w:  240px;
+  --topbar-h:    56px;
+}
+
+/* ── Dark theme (default) ──────────────────────────────────────────────── */
+body.app {
+  --bg:           #080b10;
+  --panel:        #121823;
+  --card:         #1d2330;
+  --card-hover:   #252c3b;
+  --surface-elev: #181e2a;
+
+  --border:        #293547;
+  --border-subtle: #1f2836;
+  --border-strong: #48597a;
+  --border-hover:  #3a4a63;
+
+  --text-primary:   #e0e2e5;
+  --text-heading:   #f0f2f4;
+  --text-secondary: #c0c4c8;
+  --text-muted:     #b0b4ba;
+  --text-faint:     #8b8f96;
+
+  --accent:        #2dd4bf;
+  --accent-hover:  #5eead4;
+  --accent-bg:     rgba(45,212,191,.12);
+  --accent-border: rgba(45,212,191,.30);
+
+  --success:        #22c55e;
+  --success-bg:     rgba(34,197,94,.12);
+  --success-border: rgba(34,197,94,.30);
+  --warning:        #fbbf24;
+  --warning-bg:     rgba(251,191,36,.12);
+  --warning-border: rgba(251,191,36,.30);
+  --danger:         #ef4444;
+  --danger-bg:      rgba(239,68,68,.12);
+  --danger-border:  rgba(239,68,68,.30);
+  --info:           var(--accent);
+  --info-bg:        var(--accent-bg);
+  --info-border:    var(--accent-border);
+
+  --row-hover: rgba(255,255,255,.03);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.40), 0 1px 2px rgba(0,0,0,.24);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.50), 0 2px 4px rgba(0,0,0,.30);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.60), 0 4px 8px rgba(0,0,0,.40);
+}
+
+/* ── Light theme ───────────────────────────────────────────────────────── */
+html.light-mode body.app,
+body.app.theme-light {
+  --bg:           #dde4ee;
+  --panel:        #ffffff;
+  --card:         #ffffff;
+  --card-hover:   #f6f9fc;
+  --surface-elev: #eff3f9;
+
+  --border:        #c9d2de;
+  --border-subtle: #e1e7ef;
+  --border-strong: #8290a4;
+  --border-hover:  #b3bfcd;
+
+  --text-primary:   #1e293b;
+  --text-heading:   #0f172a;
+  --text-secondary: #334155;
+  --text-muted:     #64748b;
+  --text-faint:     #94a3b8;
+
+  --accent:        #2563eb;
+  --accent-hover:  #1d4ed8;
+  --accent-bg:     rgba(37,99,235,.08);
+  --accent-border: rgba(37,99,235,.20);
+
+  --success:        #16a34a;
+  --success-bg:     rgba(22,163,74,.08);
+  --success-border: rgba(22,163,74,.20);
+  --warning:        #d97706;
+  --warning-bg:     rgba(217,119,6,.08);
+  --warning-border: rgba(217,119,6,.20);
+  --danger:         #dc2626;
+  --danger-bg:      rgba(220,38,38,.08);
+  --danger-border:  rgba(220,38,38,.20);
+
+  --row-hover: rgba(0,0,0,.03);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.08);
+}
+
+/* ── Body base ─────────────────────────────────────────────────────────── */
+body.app {
+  font-family: var(--font-sans);
+  background:  var(--bg);
+  color:       var(--text-primary);
+  min-height:  100vh;
+  font-size:   14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Theme toggle button (injected by ui.js) ───────────────────────────── */
+#theme-toggle {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  z-index: 9999;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, border-color .15s, transform .15s;
+}
+#theme-toggle:hover  { background: var(--card-hover); border-color: var(--border-hover); transform: scale(1.05); }
+#theme-toggle:active { transform: scale(0.97); }
+#theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Skip link ─────────────────────────────────────────────────────────── */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 8px;
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 14px;
+  z-index: 10000;
+  text-decoration: none;
+}
+.skip-link:focus { top: 8px; }
+
+/* ── Screen-reader only ────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border: 0;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* ── Reduced motion ────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}TASCAT Decisions{% endblock %}
+{% block breadcrumb %}TASCAT Decisions{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1 class="page-title">TASCAT Decisions</h1>
+  <p class="page-sub">Resource &amp; Planning tribunal decisions, keyword-indexed. {{ decisions|length }} decision{{ '' if decisions|length == 1 else 's' }} shown.</p>
+</header>
+
+<form method="GET" action="{{ url_for('decisions') }}" class="app-card app-card-padded" style="margin-bottom:20px">
+  <div class="form-row">
+    <div class="form-group" style="flex:1">
+      <label class="form-label" for="q">Search decisions</label>
+      <input class="app-input" type="text" id="q" name="q" value="{{ q }}" placeholder="e.g. visitor accommodation amenity, bushfire hazard, coastal erosion">
+    </div>
+    <div class="form-group" style="align-self:flex-end">
+      <button type="submit" class="app-btn primary">Search</button>
+    </div>
+  </div>
+</form>
+
+{% if not decisions %}
+<div class="app-card app-card-padded"><p class="text-faint" style="margin:0">No decisions match that search.</p></div>
+{% else %}
+{% for d in decisions %}
+<div class="app-card app-card-padded" style="margin-bottom:14px">
+  <div class="app-card-header">
+    <div class="app-section-title">{{ d.citation }}</div>
+    <span class="app-badge {{ 'success' if 'set aside' in d.outcome or 'varied' in d.outcome else 'danger' }}">{{ d.outcome }}</span>
+  </div>
+  <div style="font-size:12px;color:var(--text-faint);font-family:var(--font-mono);margin-bottom:8px">{{ d.title }} · {{ d.municipality }} · <span style="color:var(--danger)">{{ d.provenance }}</span></div>
+  <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin:0 0 8px">{{ d.summary }}</p>
+  <p style="font-size:13px;color:var(--text-primary);line-height:1.6;margin:0;padding-top:8px;border-top:1px solid var(--border-subtle)"><strong>Principle:</strong> {{ d.principle }}</p>
+  <div style="margin-top:8px">{% for k in d.keywords %}<span class="app-tag" style="margin-right:6px">{{ k }}</span>{% endfor %}</div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

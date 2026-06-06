@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Error {{ code }} — TasPlan Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+</head>
+<body class="app theme-dark">
+<main class="login-page" id="main-content">
+  <div class="login-grid-bg" aria-hidden="true"></div>
+  <div class="login-glow" aria-hidden="true"></div>
+  <div class="login-box" style="text-align:center">
+    <div style="font-size:64px;font-weight:900;font-family:var(--font-mono);color:var(--accent);line-height:1">{{ code }}</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text-primary);margin:12px 0 8px">{{ message }}</div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:24px">
+      {% if code == 403 %}You do not have permission to access this page.
+      {% elif code == 404 %}The page you're looking for doesn't exist.
+      {% else %}Something went wrong on our end.{% endif %}
+    </p>
+    <a href="{{ url_for('home') }}" class="app-btn primary lg">← Return Home</a>
+  </div>
+</main>
+</body>
+</html>

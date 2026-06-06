@@ -1,0 +1,24 @@
+runtime: python311
+
+entrypoint: gunicorn -b :$PORT main:app
+
+env_variables:
+  FLASK_ENV: "production"
+  # GCS_BUCKET: set to a bucket name to use Cloud Storage instead of local data/
+  # GEMINI_API_KEY: required for AI-assisted review (features degrade gracefully without it)
+  # SECRET_KEY: set via Secret Manager or:
+  #   gcloud app deploy --update-env-vars SECRET_KEY=$(openssl rand -hex 32)
+
+handlers:
+  - url: /static
+    static_dir: static
+    secure: always
+
+  - url: /.*
+    script: auto
+    secure: always
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 5
+  target_cpu_utilization: 0.65
