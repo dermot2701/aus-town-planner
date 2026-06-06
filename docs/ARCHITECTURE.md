@@ -81,7 +81,7 @@ Gemini JSON responses are parsed via `re.search(r'\{.*\}', text, re.DOTALL)`.
 | Var | Purpose | Default |
 |-----|---------|---------|
 | `SECRET_KEY` | Flask session secret | dev default — set in prod |
-| `GEMINI_API_KEY` | Gemini reviews, embeddings, Holly, Case Review, Council chairman | unset → heuristic |
+| `GEMINI_API_KEY` | Gemini reviews, embeddings, Holly, Case Review, Council Chair (Holly) | unset → heuristic |
 | `GROQ_API_KEY` | Council member (Llama 3.3 70B) | unset |
 | `MINIMAX_API_KEY` | Council member (MiniMax) | unset |
 | `GCS_BUCKET` | Use Cloud Storage instead of `data/` | unset → local |

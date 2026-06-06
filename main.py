@@ -171,7 +171,7 @@ _COUNCIL_MEMBER_SYSTEM = (
 )
 
 _COUNCIL_CHAIRMAN_PREAMBLE = (
-    "You are the Chairman of a Tasmanian planning assessment council. "
+    "You are Holly, acting as Chair of a Tasmanian planning assessment council. "
     "Synthesise the council members' assessments into a single definitive response for a statutory planner. "
     "Incorporate the strongest insights, resolve any disagreements, and cite clause IDs and TASCAT citations raised. "
     "End with: '" + CAVEAT + "'"
@@ -202,8 +202,8 @@ def _http_post_json(url: str, payload: dict, headers: dict, timeout: int = 60) -
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")[:400]
-        raise RuntimeError(f"HTTP {e.code}: {body}") from None
+        body = e.read().decode("utf-8", errors="replace")[:400].strip()
+        raise RuntimeError(f"HTTP {e.code} {e.reason}: {body or '(no body)'}") from None
 
 
 def _council_query_gemini(prompt: str) -> str:
@@ -239,12 +239,18 @@ def _council_query_minimax(prompt: str) -> str:
         return data["choices"][0]["message"]["content"]
     if data.get("reply"):
         return data["reply"]
-    # Empty choices usually means an API-level rejection (auth, balance, moderation);
-    # base_resp carries the real reason.
+    # Empty choices means an API-level rejection. base_resp.status_code is the real
+    # signal (1004=auth, 1008=insufficient balance, 1002=rate limit, 1027=content
+    # risk); the input/output_sensitive flags flag moderation. Surface all of it
+    # unconditionally — status_msg is often blank even when status_code is set.
     base = data.get("base_resp") or {}
-    if base.get("status_msg"):
-        raise RuntimeError(f"MiniMax {base.get('status_code')}: {base.get('status_msg')}")
-    raise ValueError(f"Unexpected MiniMax response: {list(data.keys())}")
+    flags = {k: data[k] for k in ("input_sensitive", "output_sensitive",
+                                  "input_sensitive_type", "output_sensitive_type")
+             if data.get(k)}
+    raise RuntimeError(
+        f"MiniMax returned no choices — status_code={base.get('status_code')} "
+        f"status_msg={base.get('status_msg') or '(blank)'!r}"
+        + (f" moderation={flags}" if flags else ""))
 
 
 def _council_query(model_key: str, prompt: str) -> str:
@@ -957,8 +963,8 @@ def council_stream():
              chars={k: len(v) for k, v in stage2.items()})
         yield sse({"type": "stage_complete", "stage": 2})
 
-        # Stage 3 — chairman synthesis (always Gemini)
-        yield sse({"type": "stage_start", "stage": 3, "message": "Chairman synthesising..."})
+        # Stage 3 — Holly (as Chair) synthesis (always Gemini)
+        yield sse({"type": "stage_start", "stage": 3, "message": "Holly (as Chair) synthesising..."})
         s1_text = "\n\n".join(f"{active[k]['label']}:\n{v}" for k, v in stage1.items())
         s2_text = "\n\n".join(f"{active[k]['label']} review:\n{v}" for k, v in stage2.items())
         chairman_prompt = (

@@ -5,7 +5,7 @@
 {% block content %}
 <header class="page-header">
   <h1 class="page-title">Planning Council</h1>
-  <p class="page-sub">Multiple AI specialists debate your planning question independently, critique each other, then a Chairman synthesises the consensus. Grounded in the ingested scheme and TASCAT decisions.</p>
+  <p class="page-sub">Multiple AI specialists debate your planning question independently, critique each other, then Holly, acting as Chair, synthesises the consensus. Grounded in the ingested scheme and TASCAT decisions.</p>
 </header>
 
 {% if not has_quorum %}
@@ -41,7 +41,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-subtle)">
           <div>
             <div style="font-size:13px;color:var(--text-primary);font-weight:500">{{ m.label }}</div>
-            <div style="font-size:11px;color:var(--text-faint)">{{ 'Chairman · Stage 3 synthesis' if m.chairman else 'Member · Stage 1 & 2' }}</div>
+            <div style="font-size:11px;color:var(--text-faint)">{{ 'Holly acting as Chair · Stage 3 synthesis' if m.chairman else 'Member · Stage 1 & 2' }}</div>
           </div>
           <span class="app-badge success">active</span>
         </div>
@@ -185,8 +185,8 @@ function renderStage2() {
 function appendStage3Shell() {
   main().insertAdjacentHTML('beforeend', `
     <div class="council-stage active" id="stage3" style="margin-top:16px">
-      <div class="stage-hdr"><div class="stage-num" id="sn3">3</div><div class="app-section-title">Stage 3 — Chairman's Synthesis</div></div>
-      <div class="stage-loading"><span class="live-dot"></span> Chairman synthesising...</div>
+      <div class="stage-hdr"><div class="stage-num" id="sn3">3</div><div class="app-section-title">Stage 3 — Holly's Synthesis (Chair)</div></div>
+      <div class="stage-loading"><span class="live-dot"></span> Holly (as Chair) synthesising...</div>
       <div class="council-final" id="finalBody" style="display:none"></div>
     </div>`);
 }
