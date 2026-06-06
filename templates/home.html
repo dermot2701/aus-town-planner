@@ -68,8 +68,13 @@
     <div class="app-card-header"><div class="app-section-title">Scope &amp; caveat</div></div>
     <p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin:0">
       {{ caveat }} TasPlan Review supports qualified planners; it does not make determinations.
+      {% if app_config.get('corpus_status') == 'SAMPLE' %}
       The current corpus is <strong>illustrative SAMPLE data</strong> pending live ingestion of the
       Tasmanian Planning Scheme (TPSO) and TASCAT decisions (AustLII).
+      {% else %}
+      The State Planning Provisions and TASCAT decisions are ingested from source;
+      per-municipality Local Provisions Schedules are not yet loaded.
+      {% endif %}
     </p>
   </div>
 </div>
