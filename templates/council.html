@@ -127,7 +127,7 @@ function handle(ev) {
     appendStage3Shell();
   } else if (ev.type === 'stage3_final') {
     const fb = document.getElementById('finalBody');
-    if (fb) { fb.textContent = ev.response; fb.style.display = 'block'; }
+    if (fb) { fb.innerHTML = mdLite(ev.response); fb.style.display = 'block'; }
     const loading = document.querySelector('#stage3 .stage-loading');
     if (loading) loading.remove();
   } else if (ev.type === 'stage_complete' && ev.stage === 3) {
@@ -155,7 +155,7 @@ function renderStage1() {
   const keys = Object.keys(s1);
   const first = defaultKey(s1, keys);
   let tabs = keys.map(k => `<button class="stage-tab${k===first?' active':''}" onclick="switchTab(this,'s1-${k}')">${escHtml(s1[k].label)}</button>`).join('');
-  let panels = keys.map(k => `<div id="s1-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${escHtml(s1[k].text)}</div>`).join('');
+  let panels = keys.map(k => `<div id="s1-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${mdLite(s1[k].text)}</div>`).join('');
   document.getElementById('stage1').innerHTML = `
     <div class="stage-hdr"><div class="stage-num" id="sn1">1</div><div class="app-section-title">Stage 1 — First Opinions</div></div>
     <div class="stage-tabs">${tabs}</div>${panels}`;
@@ -173,7 +173,7 @@ function renderStage2() {
   const keys = Object.keys(s2);
   const first = defaultKey(s2, keys);
   let tabs = keys.map(k => `<button class="stage-tab${k===first?' active':''}" onclick="switchTab(this,'s2-${k}')">${escHtml(s2[k].label)}</button>`).join('');
-  let panels = keys.map(k => `<div id="s2-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${escHtml(s2[k].text)}</div>`).join('');
+  let panels = keys.map(k => `<div id="s2-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${mdLite(s2[k].text)}</div>`).join('');
   document.getElementById('stage2').innerHTML = `
     <div class="stage-hdr"><div class="stage-num" id="sn2">2</div><div class="app-section-title">Stage 2 — Peer Reviews</div></div>
     <div class="stage-tabs">${tabs}</div>${panels}`;
@@ -198,6 +198,17 @@ function switchTab(btn, panelId) {
 
 function escHtml(s) {
   return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+}
+
+// Lightweight, safe markdown for council answers: escape first, then add only our
+// own tags — so model output can't inject HTML. Handles bold, headings, and
+// bullet markers; line breaks/indentation are preserved by white-space:pre-wrap.
+function mdLite(s) {
+  let t = escHtml(s);
+  t = t.replace(/^#{1,6}\s+(.*)$/gm, '<strong>$1</strong>');   // headings → bold line
+  t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');  // **bold**
+  t = t.replace(/^(\s*)[\*\-]\s+/gm, '$1• ');                  // -/* bullets → •
+  return t;
 }
 </script>
 {% endblock %}
