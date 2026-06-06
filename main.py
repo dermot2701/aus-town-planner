@@ -888,9 +888,18 @@ def council_stream():
             yield sse({"type": "error", "message": "Council requires at least 2 models. Configure GEMINI_API_KEY and GROQ_API_KEY."})
             return
 
-        ctx = retrieve(query=question)
-        skills = _skills_context()
-        ctx_text = _format_context(ctx)
+        try:
+            muni = _detect_municipality(question)
+            ctx = retrieve(query=question, municipality=muni, k_scheme=12)
+            skills = _skills_context()
+            ctx_text = _format_context(ctx)
+        except Exception as e:
+            yield sse({"type": "error", "message": f"Failed to prepare context: {e}"})
+            return
+        _log("council.retrieve", question=question[:200], municipality=muni,
+             zone=_detect_zone(question), members=list(active.keys()),
+             scheme_clauses=[c.get("clause_id") for c in ctx["scheme"]],
+             decisions=[d.get("citation") for d in ctx["decisions"]])
         member_prompt = (
             f"{_COUNCIL_MEMBER_SYSTEM}\n\n"
             f"{skills}\n\n"
