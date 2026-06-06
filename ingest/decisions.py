@@ -145,22 +145,28 @@ def _parse_feed(xml_text, db, year_from, year_to):
 def discover(db, year_from, year_to):
     """Return [{citation, url, db}] for one tribunal across a year range.
 
-    Primary: RSS feed at www8.austlii.edu.au/cgi-bin/feed/...
-    Fallback: year-based HTML index (may be unavailable on the new host).
+    Uses BOTH the RSS feed (recent cases) and year-index pages (full archive),
+    deduplicating by case number so each case appears once.
     """
+    seen = set()  # case numbers already added
+    out = []
+
+    # 1. RSS feed — catches the most recent cases quickly
     feed_url = AUSTLII_BASE + FEED_PATHS[db]
     try:
         xml_text = fetch(feed_url)
-        out = _parse_feed(xml_text, db, year_from, year_to)
-        if out:
-            print(f"[decisions] {db} feed: {len(out)} cases ({year_from}–{year_to})")
-            return out
-        print(f"[decisions] {db} feed: no cases in range {year_from}–{year_to}, trying year index")
+        rss = _parse_feed(xml_text, db, year_from, year_to)
+        for r in rss:
+            num_m = re.search(r"/(\d+)\.html", r["url"])
+            key = num_m.group(1) if num_m else r["url"]
+            if key not in seen:
+                seen.add(key)
+                out.append(r)
+        print(f"[decisions] {db} feed: {len(rss)} cases ({year_from}–{year_to})")
     except Exception as e:
-        print(f"[decisions] {db}: feed unreachable ({e}), trying year index")
+        print(f"[decisions] {db}: feed unreachable ({e})")
 
-    # Fallback: year-based HTML index
-    out = []
+    # 2. Year-index pages — full archive for each requested year
     for year in range(year_from, year_to + 1):
         index_url = AUSTLII_BASE + f"{DB_PATHS[db]}{year}/"
         try:
@@ -168,7 +174,7 @@ def discover(db, year_from, year_to):
         except Exception as e:
             print(f"[decisions] {db} {year}: index unreachable ({e})")
             continue
-        seen = set()
+        new = 0
         for href, num in _CASE_LINK_RE.findall(index):
             if num in seen:
                 continue
@@ -178,7 +184,8 @@ def discover(db, year_from, year_to):
                 "url": urljoin(index_url, href),
                 "db": db,
             })
-        print(f"[decisions] {db} {year}: {len(seen)} cases")
+            new += 1
+        print(f"[decisions] {db} {year}: {new} new cases from year-index")
     return out
 
 
