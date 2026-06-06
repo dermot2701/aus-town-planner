@@ -10,7 +10,7 @@
 
 <div class="grid-2" style="align-items:start">
   <!-- ── Question form ────────────────────────────────────────────── -->
-  <form method="POST" action="{{ url_for('ask_holly') }}" class="app-card app-card-padded">
+  <form id="askForm" method="POST" action="{{ url_for('ask_holly') }}" class="app-card app-card-padded">
     <div class="app-card-header"><div class="app-section-title">Your question</div></div>
     {% if not gemini %}
     <div class="app-alert warning" style="margin-bottom:12px">No Gemini API key — Holly is offline.</div>
@@ -20,11 +20,11 @@
         placeholder="e.g. What are the acceptable solutions for building height in the General Residential zone in Hobart? Or: Has TASCAT considered short-stay accommodation in residential zones?">{{ question }}</textarea>
       <div class="form-hint">Holly retrieves relevant clauses and decisions automatically — no need to cite them yourself.</div>
     </div>
-    <button type="submit" class="app-btn primary lg w-full" style="justify-content:center" {% if not gemini %}disabled{% endif %}>Ask Holly</button>
+    <button id="askBtn" type="submit" class="app-btn primary lg w-full" style="justify-content:center" {% if not gemini %}disabled{% endif %}>Ask Holly</button>
   </form>
 
   <!-- ── Answer ───────────────────────────────────────────────────── -->
-  <div>
+  <div id="answerCol">
     {% if error %}
     <div class="app-card app-card-padded">
       <div class="app-alert danger">{{ error }}</div>
@@ -46,4 +46,33 @@
     {% endif %}
   </div>
 </div>
+
+<style>
+  .spin{display:inline-block;width:16px;height:16px;border:2px solid currentColor;
+        border-right-color:transparent;border-radius:50%;animation:hollyspin .7s linear infinite;
+        vertical-align:middle;margin-right:8px}
+  .spin-lg{width:28px;height:28px;border-width:3px;color:var(--accent,#2dd4bf)}
+  @keyframes hollyspin{to{transform:rotate(360deg)}}
+</style>
+<script>
+  (function () {
+    var form = document.getElementById('askForm');
+    if (!form) return;
+    form.addEventListener('submit', function () {
+      var ta = form.querySelector('textarea[name=question]');
+      if (!ta || !ta.value.trim()) return;            // nothing to ask
+      var btn = document.getElementById('askBtn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Asking Holly…'; }
+      var col = document.getElementById('answerCol');
+      if (col) {
+        col.innerHTML =
+          '<div class="app-card app-card-padded" style="height:100%;display:flex;' +
+          'flex-direction:column;align-items:center;justify-content:center;gap:14px">' +
+          '<span class="spin spin-lg"></span>' +
+          '<p class="text-faint" style="text-align:center;max-width:280px">' +
+          'Holly is reading the scheme clauses and TASCAT decisions…</p></div>';
+      }
+    });
+  })();
+</script>
 {% endblock %}
