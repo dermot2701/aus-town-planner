@@ -12,6 +12,7 @@ the review engine all live here. Live ingestion lives in ingest/.
 import os
 import re
 import json
+import math
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from functools import wraps
@@ -349,12 +350,78 @@ def _score_chunk(query_tokens, chunk):
     return score
 
 
+# ── Semantic retrieval (embeddings) ───────────────────────────────────────────
+
+EMBED_MODEL = "text-embedding-004"
+
+
+def _embed_text(text, task_type="RETRIEVAL_QUERY"):
+    """Embed text via Gemini's free embedding endpoint. Returns a vector, or
+    None when no key is set or the call fails. Same urllib pattern as the
+    council helpers — no SDK dependency."""
+    if not GEMINI_API_KEY:
+        return None
+    import urllib.request
+    payload = json.dumps({
+        "model": f"models/{EMBED_MODEL}",
+        "content": {"parts": [{"text": text[:8000]}]},
+        "taskType": task_type,
+    }).encode()
+    req = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{EMBED_MODEL}:embedContent?key={GEMINI_API_KEY}",
+        data=payload, headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+        return data["embedding"]["values"]
+    except Exception:
+        return None
+
+
+def _cosine(a, b):
+    """Cosine similarity between two equal-length vectors. Pure stdlib."""
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+def retrieve_passages(query, k=6, min_score=0.45):
+    """Return top-k decision passages by cosine similarity to the query.
+
+    Reads decision_chunks.json (full-text holding passages + embeddings). Returns
+    [] when the file is absent or the query can't be embedded — callers then fall
+    back to keyword-matched summaries, preserving graceful degradation."""
+    chunks = load_json("decision_chunks.json").get("chunks", [])
+    if not chunks:
+        return []
+    qvec = _embed_text(query, task_type="RETRIEVAL_QUERY")
+    if not qvec:
+        return []
+    scored = []
+    for c in chunks:
+        emb = c.get("embedding")
+        if not emb:
+            continue
+        s = _cosine(qvec, emb)
+        if s >= min_score:
+            scored.append((s, c))
+    scored.sort(key=lambda t: t[0], reverse=True)
+    return [{**c, "_score": round(s, 3)} for s, c in scored[:k]]
+
+
 def retrieve(query, municipality=None, zone=None, use_class=None, k_scheme=8, k_decisions=4):
     """Return municipality-scoped scheme clauses + keyword-matched decisions.
 
     Scheme scope filter: a chunk is in-scope if it is statewide (SPP) or its
     scope matches the proposal's municipality (LPS). Decisions are ranked by
-    keyword overlap with a boost for a municipality match.
+    keyword overlap with a boost for a municipality match. When a semantic index
+    (decision_chunks.json) is present, full-text precedent passages are also
+    attached for richer grounding.
     """
     qtext = " ".join(str(x) for x in [query, zone, use_class] if x)
     qtokens = _tokens(qtext)
@@ -380,7 +447,10 @@ def retrieve(query, municipality=None, zone=None, use_class=None, k_scheme=8, k_
     dec_sorted = sorted(decisions, key=dec_score, reverse=True)
     dec_out = [d for d in dec_sorted if dec_score(d) > 0][:k_decisions]
 
-    return {"scheme": scheme_out, "decisions": dec_out}
+    # Semantic precedent passages (full holding text) when the index exists.
+    passages = retrieve_passages(qtext)
+
+    return {"scheme": scheme_out, "decisions": dec_out, "decision_passages": passages}
 
 
 # ── Review engine ─────────────────────────────────────────────────────────────
@@ -523,6 +593,11 @@ def _format_context(ctx):
     lines.append("\nTRIBUNAL DECISIONS:")
     for d in ctx["decisions"]:
         lines.append(f"- {d['citation']} ({d.get('municipality','')}) [{d.get('outcome','')}]: {d.get('summary','')} PRINCIPLE: {d.get('principle','')}")
+    passages = ctx.get("decision_passages") or []
+    if passages:
+        lines.append("\nKEY PRECEDENT PASSAGES (verbatim — cite the citation when relying on these):")
+        for p in passages:
+            lines.append(f"- {p['citation']} ({p.get('municipality','')}): {p.get('text','')}")
     return "\n".join(lines)
 
 
