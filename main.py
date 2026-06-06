@@ -171,7 +171,7 @@ _COUNCIL_MEMBER_SYSTEM = (
 )
 
 _COUNCIL_CHAIRMAN_PREAMBLE = (
-    "You are the Chairman of a Tasmanian planning assessment council. "
+    "You are Holly, acting as Chair of a Tasmanian planning assessment council. "
     "Synthesise the council members' assessments into a single definitive response for a statutory planner. "
     "Incorporate the strongest insights, resolve any disagreements, and cite clause IDs and TASCAT citations raised. "
     "End with: '" + CAVEAT + "'"
@@ -190,60 +190,67 @@ def _council_active_members():
     return active
 
 
-def _council_query_gemini(prompt: str) -> str:
+def _http_post_json(url: str, payload: dict, headers: dict, timeout: int = 60) -> dict:
+    """POST JSON and return parsed JSON. On an HTTP error, surface the response
+    body (providers explain *why* a 4xx happened there) instead of a bare code."""
     import urllib.request
+    import urllib.error
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode(),
+        headers={**headers, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:400].strip()
+        raise RuntimeError(f"HTTP {e.code} {e.reason}: {body or '(no body)'}") from None
+
+
+def _council_query_gemini(prompt: str) -> str:
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     )
-    payload = json.dumps({
+    data = _http_post_json(url, {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7},
-    }).encode()
-    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
+    }, {})
     return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def _council_query_groq(prompt: str) -> str:
-    import urllib.request
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    payload = json.dumps({
+    data = _http_post_json("https://api.groq.com/openai/v1/chat/completions", {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 1024,
         "temperature": 0.7,
-    }).encode()
-    req = urllib.request.Request(url, data=payload, headers={
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-    })
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
+    }, {"Authorization": f"Bearer {GROQ_API_KEY}"})
     return data["choices"][0]["message"]["content"]
 
 
 def _council_query_minimax(prompt: str) -> str:
-    import urllib.request
-    url = "https://api.minimaxi.chat/v1/text/chatcompletion_v2"
-    payload = json.dumps({
+    data = _http_post_json("https://api.minimaxi.chat/v1/text/chatcompletion_v2", {
         "model": "MiniMax-Text-01",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 1024,
         "temperature": 0.7,
-    }).encode()
-    req = urllib.request.Request(url, data=payload, headers={
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {MINIMAX_API_KEY}",
-    })
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
-    if "choices" in data and data["choices"]:
+    }, {"Authorization": f"Bearer {MINIMAX_API_KEY}"})
+    if data.get("choices"):
         return data["choices"][0]["message"]["content"]
-    if "reply" in data:
+    if data.get("reply"):
         return data["reply"]
-    raise ValueError(f"Unexpected MiniMax response: {list(data.keys())}")
+    # Empty choices means an API-level rejection. base_resp.status_code is the real
+    # signal (1004=auth, 1008=insufficient balance, 1002=rate limit, 1027=content
+    # risk); the input/output_sensitive flags flag moderation. Surface all of it
+    # unconditionally — status_msg is often blank even when status_code is set.
+    base = data.get("base_resp") or {}
+    flags = {k: data[k] for k in ("input_sensitive", "output_sensitive",
+                                  "input_sensitive_type", "output_sensitive_type")
+             if data.get(k)}
+    raise RuntimeError(
+        f"MiniMax returned no choices — status_code={base.get('status_code')} "
+        f"status_msg={base.get('status_msg') or '(blank)'!r}"
+        + (f" moderation={flags}" if flags else ""))
 
 
 def _council_query(model_key: str, prompt: str) -> str:
@@ -956,8 +963,8 @@ def council_stream():
              chars={k: len(v) for k, v in stage2.items()})
         yield sse({"type": "stage_complete", "stage": 2})
 
-        # Stage 3 — chairman synthesis (always Gemini)
-        yield sse({"type": "stage_start", "stage": 3, "message": "Chairman synthesising..."})
+        # Stage 3 — Holly (as Chair) synthesis (always Gemini)
+        yield sse({"type": "stage_start", "stage": 3, "message": "Holly (as Chair) synthesising..."})
         s1_text = "\n\n".join(f"{active[k]['label']}:\n{v}" for k, v in stage1.items())
         s2_text = "\n\n".join(f"{active[k]['label']} review:\n{v}" for k, v in stage2.items())
         chairman_prompt = (
