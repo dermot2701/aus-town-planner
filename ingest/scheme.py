@@ -162,7 +162,7 @@ def main():
     write_data("scheme_chunks.json", {"chunks": chunks})
     write_data("scheme_manifest.json", {
         "provenance": "LIVE",
-        "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "note": "State Planning Provisions ingested from the published PDF. "
                 "Local Provisions Schedules (per-municipality) not yet ingested.",
         "sources": [{"name": "State Planning Provisions (SPP)", "url": source, "fetched": True}],

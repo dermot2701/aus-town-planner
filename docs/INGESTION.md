@@ -8,9 +8,15 @@ schema the app's `retrieve()` consumes. Run as modules from the repo root.
 
 | Script | Source | Output | Purpose |
 |--------|--------|--------|---------|
-| `ingest/scheme.py` | `tpso.planning.tas.gov.au` | `scheme_chunks.json`, `scheme_manifest.json` | SPP + LPS clauses |
+| `ingest/scheme.py` | SPP PDF (`stateplanning.tas.gov.au`) | `scheme_chunks.json`, `scheme_manifest.json` | State Planning Provisions (statewide) |
+| `ingest/lps.py` | TPSO viewer API (`tpso.planning.tas.gov.au`) | `scheme_chunks.json` (merge), `scheme_manifest.json` | Local Provisions Schedules (per-municipality) |
 | `ingest/decisions.py` | AustLII (`www8.austlii.edu.au`) | `decisions.json` | TASCAT/TASRMPAT decision summaries |
 | `ingest/embed.py` | AustLII + Gemini embeddings | `decision_chunks.json` | Semantic index (RAG layer) |
+
+> **Order matters for the scheme.** `ingest/scheme.py` writes `scheme_chunks.json`
+> from scratch (SPP only); `ingest/lps.py` then **merges** each council's LPS into
+> that same file. Always run `scheme` first, then `lps`, then upload the combined
+> file to GCS.
 
 ## Shared HTTP layer — `ingest/__init__.py`
 
@@ -104,29 +110,67 @@ python -m ingest.scheme --pdf-file spp.pdf   # a locally downloaded PDF
 Yields ~500 clauses (≈400 standards, 23 use tables, 27 codes), all
 `provenance: "LIVE"`, `scope: "statewide"`.
 
-> **LPS not yet ingested.** The per-municipality **Local Provisions Schedules**
-> live in the dynamic TPSO viewer (`tpso.planning.tas.gov.au/tpso/external/
-> planning-scheme-viewer/{id}/section/{n}`), a JavaScript SPA backed by an
-> undocumented JSON API. Wiring that up needs the API endpoint (capture it from
-> the browser DevTools → Network tab). The SPP carries the substantive
-> provisions a review grounds on; the LPS layer mainly maps zones to parcels,
-> which the planner supplies as the proposal's zone.
+## Local Provisions Schedules — `ingest/lps.py`
+
+Ingests each council's **Local Provisions Schedule (LPS)** — particular purpose
+zones, specific area plans, site-specific qualifications, and code overlays
+(e.g. the local heritage list) — from the TPSO viewer. The viewer is a
+JavaScript SPA, but it is backed by a small, unauthenticated JSON/HTML API:
+
+```
+/planning-scheme-viewer/{schemeId}/init
+    → {"title": "Tasmanian Planning Scheme - Glenorchy",
+       "openSectionId": 2096,                 # the LPS root section
+       "planningSchemeTypeName": "Local Provisions Schedule"}
+/planning-scheme-viewer/{schemeId}/document-tree?effectiveForDate=YYYY-MM-DD
+    → nested {name, sectionId, children, orderNum}
+/planning-scheme-viewer/{schemeId}/section/{sectionId}/html?includeChildren=true&effectiveForDate=…
+    → rendered HTML of that section and all descendants (the clause text)
+```
+
+So per council it's: `init` → `openSectionId` → fetch that section's HTML with
+`includeChildren=true` → flatten HTML to text → chunk by clause heading
+(`GLE-S1.0`, `GLE-P2.1`, `GLE-C6.1.258`, …). Each chunk is written with
+`scope` = the council name (lowercased) so the app's `retrieve()` pulls it in
+for that municipality alongside the statewide SPP. Output schema is identical to
+`ingest/scheme.py`.
+
+```bash
+python -m ingest.lps --discover            # probe scheme ids, print id→council map
+python -m ingest.lps                       # discover + ingest every LPS (merges into SPP)
+python -m ingest.lps --scheme-id 15        # one council (15 = Glenorchy), repeatable
+python -m ingest.lps --id-range 1-60       # widen/narrow the discovery probe
+python -m ingest.lps --replace             # overwrite scheme_chunks.json (drops SPP — rarely wanted)
+```
+
+It **merges** by default: existing chunks for the councils being re-ingested are
+replaced, the statewide SPP and any other councils are kept. Scheme ids are
+discovered by probing `/{id}/init` and keeping those whose
+`planningSchemeTypeName` is `"Local Provisions Schedule"` (scheme id 30 is the
+SPP-only view and is skipped). Glenorchy alone yields ~690 LPS clauses.
 
 ## Corpus status & the SAMPLE banner
 
-The committed corpus is illustrative **SAMPLE** data (`provenance: "SAMPLE"`,
-citations suffixed `(SAMPLE)`, persistent UI banner driven by
-`app_config.corpus_status`). Ingestion overwrites it with `provenance: "LIVE"`
-records. The banner clears once both scheme and decisions are LIVE.
+The repo's committed corpus is illustrative **SAMPLE** data (`provenance:
+"SAMPLE"`, citations suffixed `(SAMPLE)`, banner driven by
+`app_config.corpus_status`). Ingestion replaces it with `provenance: "LIVE"`
+records and flips `corpus_status` to `LIVE`; the banner is gated on that flag
+(see `templates/base.html`, `admin.html`, `home.html`). **Production (GCS) is
+LIVE:** the real SPP and TASCAT decisions are loaded. Per the data rule, the
+LIVE corpus lives only in GCS — it is never committed to the repo.
 
 ## Deploying re-ingested data
 
-**Deploys never touch GCS data.** After ingesting locally, upload:
+**Deploys never touch GCS data.** Re-ingest locally, then upload. For the
+scheme, run `scheme` then `lps` so the combined file carries both layers:
 
 ```bash
+python -m ingest.scheme                                  # SPP → scheme_chunks.json
+python -m ingest.lps                                     # merge every LPS into it
+gcloud storage cp data/scheme_chunks.json   gs://aus-town-planner-data/scheme_chunks.json   --project=aus-town-planner
+gcloud storage cp data/scheme_manifest.json gs://aus-town-planner-data/scheme_manifest.json --project=aus-town-planner
 gcloud storage cp data/decisions.json       gs://aus-town-planner-data/decisions.json       --project=aus-town-planner
 gcloud storage cp data/decision_chunks.json gs://aus-town-planner-data/decision_chunks.json --project=aus-town-planner
-gcloud storage cp data/scheme_chunks.json   gs://aus-town-planner-data/scheme_chunks.json   --project=aus-town-planner
 ```
 
 Files must land at the **bucket root**, not under a `data/` prefix — see

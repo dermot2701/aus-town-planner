@@ -41,8 +41,8 @@ uploaded manually with `gcloud storage cp`.
 |------|-------|------------|
 | `app_config.json` | `{app_name, tagline, corpus_status, corpus_banner}` | Admin panel |
 | `users.json` | `{username: {name, role, password_hash}}` | `init_admin.py`, Admin panel |
-| `scheme_chunks.json` | `{chunks: [{clause_id, instrument, scope, kind, zone_or_code, title, text, keywords[], use_classes[], provenance}]}` | `ingest/scheme.py` |
-| `scheme_manifest.json` | `{provenance, sources[], municipalities_covered[], chunk_count, instruments[]}` | `ingest/scheme.py` |
+| `scheme_chunks.json` | `{chunks: [{clause_id, instrument, scope, kind, zone_or_code, title, text, keywords[], use_classes[], provenance}]}` | `ingest/scheme.py` (SPP), `ingest/lps.py` (LPS, merged) |
+| `scheme_manifest.json` | `{provenance, sources[], municipalities_covered[], chunk_count, instruments[]}` | `ingest/scheme.py`, `ingest/lps.py` |
 | `decisions.json` | `{decisions: [{citation, title, municipality, use_classes[], keywords[], summary, outcome, principle, provenance}]}` | `ingest/decisions.py` |
 | `decision_chunks.json` | `{chunks: [{chunk_id, citation, title, municipality, text, embedding[768]}]}` | `ingest/embed.py` |
 | `skills.json` | `{title, description, skills: [{id, number, title, summary, competencies[]}]}` | committed reference data |
