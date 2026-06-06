@@ -83,7 +83,7 @@ Gemini JSON responses are parsed via `re.search(r'\{.*\}', text, re.DOTALL)`.
 | `SECRET_KEY` | Flask session secret | dev default — set in prod |
 | `GEMINI_API_KEY` | Gemini reviews, embeddings, Holly, Case Review, Council Chair (Holly) | unset → heuristic |
 | `GROQ_API_KEY` | Council member (Llama 3.3 70B) | unset |
-| `OPENROUTER_API_KEY` | Council member (MiniMax M2.7, via OpenRouter) | unset |
+| `MINIMAX_API_KEY` | Council member (MiniMax M2.7, via `api.minimax.io`) | unset |
 | `GCS_BUCKET` | Use Cloud Storage instead of `data/` | unset → local |
 
 See [`SETUP.md`](SETUP.md) for deployment, [`REVIEW_ENGINE.md`](REVIEW_ENGINE.md)
