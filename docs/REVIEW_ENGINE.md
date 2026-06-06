@@ -29,6 +29,13 @@ Returns `{scheme, decisions, decision_passages}`.
   matches the proposal's municipality (LPS).
 - Ranked by `_score_chunk()` — keyword overlap (exact keyword hit = +3, any other
   token hit = +1). Top `k_scheme` (default 8).
+- **Zone-aware scoring.** `_detect_zone(text)` maps a zone name in the query
+  ("Inner Residential" → 9) via the longest-phrase match in `_SPP_ZONES`;
+  `_zone_bonus()` then adds **+6** to clauses whose `clause_id` is governed by that
+  zone (e.g. `SPP 9.*`). This stops a query about one zone surfacing another
+  zone's standards. `_detect_municipality(text)` likewise picks the council named
+  in free-text questions (used by Ask Holly and the Council, which have no
+  separate municipality field).
 
 **Decisions** (`decisions.json`)
 - Ranked by the same keyword overlap, **+2** when the decision's municipality
@@ -88,6 +95,20 @@ Deterministic and conservative — builds the **same schema** without an LLM:
   "context_sufficiency": "insufficient|partial|sufficient"
 }
 ```
+
+## Ask Holly — `/ask`
+
+Free-form planning Q&A. The route detects the municipality from the question
+(`_detect_municipality`), calls `retrieve()` (with zone-aware scoring, larger
+`k_scheme=12`), formats that context, and prompts Gemini with `_HOLLY_SYSTEM` —
+which instructs Holly to answer **only** from the supplied clauses/decisions,
+name the zone each cited clause governs, and never apply a standard from a
+different zone. With no Gemini key, Holly is offline (the form is disabled).
+Retrieval and answer/error events are logged as `ask.retrieve` / `ask.answer` /
+`ask.error`. The client shows a spinner during the synchronous POST.
+
+The same `retrieve()` + grounding rules power the **Planning Council** — see
+[COUNCIL.md](COUNCIL.md).
 
 ## Semantic RAG: what's stored vs. retrieved
 

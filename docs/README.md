@@ -5,8 +5,9 @@ Developer documentation for the Tasmanian planning assessment assistant.
 | Doc | Read it for… |
 |-----|--------------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Stack, data-access rule, routes, AI surfaces, env vars, data file schemas |
-| [REVIEW_ENGINE.md](REVIEW_ENGINE.md) | How a proposal becomes a grounded assessment — retrieval, semantic RAG, the Gemini + heuristic paths, output schema |
-| [INGESTION.md](INGESTION.md) | Building the corpus — scheme clauses, TASCAT decisions, the semantic index |
+| [REVIEW_ENGINE.md](REVIEW_ENGINE.md) | How a proposal becomes a grounded assessment — retrieval, zone-aware scoring, semantic RAG, the Gemini + heuristic paths, output schema |
+| [COUNCIL.md](COUNCIL.md) | Planning Council — the 3-stage multi-LLM debate, provider config, the page layout/SSE client, and every known provider failure mode with its fix (Groq Cloudflare 1010, MiniMax host) |
+| [INGESTION.md](INGESTION.md) | Building the corpus — scheme clauses (SPP + LPS), TASCAT decisions, the semantic index, SAMPLE→LIVE provenance |
 | [SETUP.md](SETUP.md) | Local dev and Cloud Run deployment |
 
 ## The one-paragraph version
