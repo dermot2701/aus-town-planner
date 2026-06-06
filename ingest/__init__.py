@@ -89,3 +89,12 @@ def write_data(filename, payload):
     with open(os.path.join(DATA_DIR, filename), "w") as f:
         json.dump(payload, f, indent=2)
     print(f"wrote data/{filename}")
+
+
+def read_data(filename):
+    """Read a JSON file from the local data dir. Returns None if absent."""
+    path = os.path.join(DATA_DIR, filename)
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
