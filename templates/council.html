@@ -10,9 +10,10 @@
 
 {% if not has_quorum %}
 <div class="app-alert warning">
-  Council requires at least 2 models. Currently active:
-  {% if gemini %}<strong>Gemini</strong>{% endif %}{% if not groq %} — add <code>GROQ_API_KEY</code> (free at console.groq.com) to enable Llama.{% endif %}
-  {% if groq %}<strong>Llama (Groq)</strong>{% endif %}{% if not gemini %} — add <code>GEMINI_API_KEY</code> to enable Gemini.{% endif %}
+  Council requires at least 2 models. Add API keys via Secret Manager:
+  <code>GEMINI_API_KEY</code>{% if gemini %} ✓{% endif %},
+  <code>GROQ_API_KEY</code>{% if groq %} ✓{% endif %},
+  <code>MINIMAX_API_KEY</code>{% if minimax %} ✓{% endif %}.
 </div>
 {% endif %}
 

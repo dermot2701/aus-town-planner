@@ -152,10 +152,12 @@ def inject_globals():
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY")
 
 _COUNCIL_MODELS = {
-    "gemini": {"label": "Gemini 2.5 Flash", "chairman": True},
-    "groq":   {"label": "Llama 3.3 70B (Groq)", "chairman": False},
+    "gemini":  {"label": "Gemini 2.5 Flash",     "chairman": True},
+    "groq":    {"label": "Llama 3.3 70B (Groq)", "chairman": False},
+    "minimax": {"label": "MiniMax-01",            "chairman": False},
 }
 
 _COUNCIL_MEMBER_SYSTEM = (
@@ -181,6 +183,8 @@ def _council_active_members():
         active["gemini"] = _COUNCIL_MODELS["gemini"]
     if GROQ_API_KEY:
         active["groq"] = _COUNCIL_MODELS["groq"]
+    if MINIMAX_API_KEY:
+        active["minimax"] = _COUNCIL_MODELS["minimax"]
     return active
 
 
@@ -218,11 +222,35 @@ def _council_query_groq(prompt: str) -> str:
     return data["choices"][0]["message"]["content"]
 
 
+def _council_query_minimax(prompt: str) -> str:
+    import urllib.request
+    url = "https://api.minimaxi.chat/v1/text/chatcompletion_v2"
+    payload = json.dumps({
+        "model": "MiniMax-Text-01",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1024,
+        "temperature": 0.7,
+    }).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+    })
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read())
+    if "choices" in data and data["choices"]:
+        return data["choices"][0]["message"]["content"]
+    if "reply" in data:
+        return data["reply"]
+    raise ValueError(f"Unexpected MiniMax response: {list(data.keys())}")
+
+
 def _council_query(model_key: str, prompt: str) -> str:
     if model_key == "gemini":
         return _council_query_gemini(prompt)
     if model_key == "groq":
         return _council_query_groq(prompt)
+    if model_key == "minimax":
+        return _council_query_minimax(prompt)
     raise ValueError(f"Unknown council model: {model_key}")
 
 
@@ -653,7 +681,8 @@ def ask_holly():
 def council():
     active = _council_active_members()
     return render_template("council.html", models=active, has_quorum=len(active) >= 2,
-                           gemini=bool(GEMINI_API_KEY), groq=bool(GROQ_API_KEY))
+                           gemini=bool(GEMINI_API_KEY), groq=bool(GROQ_API_KEY),
+                           minimax=bool(MINIMAX_API_KEY))
 
 
 @app.route("/council/stream")
