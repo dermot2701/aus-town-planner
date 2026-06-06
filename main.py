@@ -205,6 +205,7 @@ def _http_post_json(url: str, payload: dict, headers: dict, timeout: int = 60) -
                            "AppleWebKit/537.36 (KHTML, like Gecko) "
                            "Chrome/125.0.0.0 Safari/537.36"),
             "Accept": "application/json",
+            "Accept-Language": "en-AU,en;q=0.9",
             **headers,
             "Content-Type": "application/json",
         })
