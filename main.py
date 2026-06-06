@@ -879,6 +879,7 @@ def council_stream():
         def sse(payload):
             return f"data: {json.dumps(payload)}\n\n"
 
+        yield ": stream-open\n\n"   # prime the connection and flush headers immediately
         if not question:
             yield sse({"type": "error", "message": "No question provided."})
             return
@@ -918,9 +919,13 @@ def council_stream():
                     resp = fut.result()
                 except Exception as e:
                     resp = f"[Error: {e}]"
+                if isinstance(resp, str) and resp.startswith("[Error"):
+                    _log("council.member_error", stage=1, model=k, detail=resp[:300])
                 stage1[k] = resp
                 yield sse({"type": "stage1_response", "model": k,
                            "label": active[k]["label"], "response": resp})
+        _log("council.stage_done", stage=1,
+             chars={k: len(v) for k, v in stage1.items()})
         yield sse({"type": "stage_complete", "stage": 1})
 
         # Stage 2 — peer reviews (anonymised)
@@ -942,9 +947,13 @@ def council_stream():
                     rev = fut.result()
                 except Exception as e:
                     rev = f"[Error: {e}]"
+                if isinstance(rev, str) and rev.startswith("[Error"):
+                    _log("council.member_error", stage=2, model=k, detail=rev[:300])
                 stage2[k] = rev
                 yield sse({"type": "stage2_review", "model": k,
                            "label": active[k]["label"], "review": rev})
+        _log("council.stage_done", stage=2,
+             chars={k: len(v) for k, v in stage2.items()})
         yield sse({"type": "stage_complete", "stage": 2})
 
         # Stage 3 — chairman synthesis (always Gemini)
@@ -962,9 +971,11 @@ def council_stream():
             final = _council_query_gemini(chairman_prompt)
         except Exception as e:
             final = f"[Synthesis error: {e}]"
+            _log("council.synthesis_error", error=str(e)[:300])
         yield sse({"type": "stage3_final", "response": final})
         yield sse({"type": "stage_complete", "stage": 3})
         yield sse({"type": "council_complete"})
+        _log("council.done", final_chars=len(final))   # server reached the end
 
     return Response(
         stream_with_context(generate()),
