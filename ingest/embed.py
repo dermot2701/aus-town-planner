@@ -32,10 +32,71 @@ CHUNK_CHARS = 3500      # ~1000 tokens
 OVERLAP_CHARS = 300
 
 
+EMBED_THROTTLE = 0.4      # seconds between embedding calls (free-tier RPM headroom)
+EMBED_RETRIES = 4         # retries on transient/rate-limit errors
+
+
 def _embed(text):
-    """Embed one chunk as a document. Returns vector or None."""
+    """Embed one chunk as a document, with throttle + backoff on rate limits.
+    Returns vector or None after exhausting retries."""
+    import time
     from main import _embed_text
-    return _embed_text(text, task_type="RETRIEVAL_DOCUMENT")
+    delay = 2.0
+    for attempt in range(EMBED_RETRIES + 1):
+        try:
+            vec = _embed_text(text, task_type="RETRIEVAL_DOCUMENT", raise_on_error=True)
+            time.sleep(EMBED_THROTTLE)
+            return vec
+        except Exception as e:
+            msg = str(e)
+            transient = "429" in msg or "RESOURCE_EXHAUSTED" in msg or "500" in msg or "503" in msg
+            if attempt < EMBED_RETRIES and transient:
+                print(f"[embed]   rate-limited, retrying in {delay:.0f}s...")
+                time.sleep(delay)
+                delay *= 2
+                continue
+            print(f"[embed]   embed error: {msg[:160]}")
+            return None
+
+
+def _list_embedding_models():
+    """Print the models this key can use for embedContent (diagnostic on 404)."""
+    import urllib.request
+    from main import GEMINI_API_KEY
+    try:
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models"
+               f"?key={GEMINI_API_KEY}&pageSize=200")
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            data = json.loads(resp.read())
+        names = [m["name"] for m in data.get("models", [])
+                 if "embedContent" in m.get("supportedGenerationMethods", [])]
+        if names:
+            print("[embed] models available for embedContent on this key:")
+            for n in names:
+                print(f"          {n}")
+            print("[embed] set EMBED_MODEL in main.py to one of the above (without 'models/').")
+        else:
+            print("[embed] no embedContent-capable models returned for this key.")
+    except Exception as e:
+        print(f"[embed] could not list models: {e}")
+
+
+def _preflight():
+    """Do one embedding call up front; raise with the real cause if it fails.
+    Catches a missing key, an invalid key, or a wrong model before we churn
+    through hundreds of chunks."""
+    from main import _embed_text, EMBED_MODEL, GEMINI_API_KEY
+    if not GEMINI_API_KEY:
+        raise SystemExit(
+            "[embed] GEMINI_API_KEY is not set. Run with:\n"
+            "    GEMINI_API_KEY=your-key ./venv/bin/python -m ingest.embed")
+    try:
+        vec = _embed_text("preflight check", task_type="RETRIEVAL_DOCUMENT", raise_on_error=True)
+    except Exception as e:
+        print(f"[embed] embedding API call failed ({EMBED_MODEL}): {e}")
+        _list_embedding_models()
+        raise SystemExit(1)
+    print(f"[embed] preflight OK — {EMBED_MODEL} returned a {len(vec)}-dim vector")
 
 
 def chunk_text(text):
@@ -83,6 +144,8 @@ def main():
                     help="embed every case in decisions.json instead of just the seed list")
     ap.add_argument("--limit", type=int, default=100, help="max cases to embed")
     args = ap.parse_args()
+
+    _preflight()
 
     records = (_records_from_decisions(args.limit) if args.all
                else _seed_records(SEED_CITATIONS)[: args.limit])

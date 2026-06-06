@@ -80,7 +80,7 @@ GEMINI_API_KEY=... python -m ingest.embed --limit 5  # small test run
 
 Per case: fetch full `viewdoc` text → `chunk_text()` into ~3500-char
 (~1000-token) windows with 300-char overlap → embed each chunk
-(`text-embedding-004`, `RETRIEVAL_DOCUMENT`) → write
+(`gemini-embedding-001`, `RETRIEVAL_DOCUMENT`) → write
 `{chunk_id, citation, title, municipality, text, embedding[768]}`.
 
 This **complements** `decisions.json` (kept for the `/decisions` browse page and

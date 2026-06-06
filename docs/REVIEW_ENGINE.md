@@ -37,7 +37,7 @@ Returns `{scheme, decisions, decision_passages}`.
   as a fallback.
 
 **Semantic passages** (`decision_chunks.json`) — the RAG layer
-- `retrieve_passages(query)` embeds the query (`text-embedding-004`,
+- `retrieve_passages(query)` embeds the query (`gemini-embedding-001`,
   `RETRIEVAL_QUERY`), scores every stored chunk by **cosine similarity**
   (`_cosine`, pure stdlib), and returns the top `k` (default 6) above
   `min_score` (0.45).
@@ -108,5 +108,5 @@ The semantic layer currently covers the curated leading precedents
 - **No SDK:** Gemini and embeddings call the REST API directly (the
   `google-generativeai` SDK was removed; its successor had a cffi dependency
   conflict in the container).
-- **Embeddings dimension:** `text-embedding-004` returns 768 floats. If you change
+- **Embeddings dimension:** `gemini-embedding-001` returns 768 floats. If you change
   `EMBED_MODEL`, re-run `ingest.embed` so the index matches.

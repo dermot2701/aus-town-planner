@@ -19,7 +19,7 @@ assessment.
 | Storage | Local `data/` dir, or Google Cloud Storage when `GCS_BUCKET` is set |
 | Auth | Session-based, Werkzeug password hashing, `@login_required` / `@admin_required` |
 | AI | Google Gemini (`gemini-2.5-flash`) via `_gemini_model()`; degrades gracefully without a key |
-| Embeddings | Gemini `text-embedding-004` (free tier) via `_embed_text()` |
+| Embeddings | Gemini `gemini-embedding-001` (free tier) via `_embed_text()` |
 | Multi-LLM | Gemini + Llama (Groq) + MiniMax for the Planning Council |
 | Frontend | Jinja2 + Bootstrap 5 (layout only) + Palantir-dark design system (teal accent) |
 | Serving | Cloud Run → Gunicorn (1 worker, 8 threads). Domain `aus-planner.allbridge.com.au` |
