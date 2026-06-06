@@ -38,9 +38,31 @@ def _embed(text):
     return _embed_text(text, task_type="RETRIEVAL_DOCUMENT")
 
 
+def _list_embedding_models():
+    """Print the models this key can use for embedContent (diagnostic on 404)."""
+    import urllib.request
+    from main import GEMINI_API_KEY
+    try:
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models"
+               f"?key={GEMINI_API_KEY}&pageSize=200")
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            data = json.loads(resp.read())
+        names = [m["name"] for m in data.get("models", [])
+                 if "embedContent" in m.get("supportedGenerationMethods", [])]
+        if names:
+            print("[embed] models available for embedContent on this key:")
+            for n in names:
+                print(f"          {n}")
+            print("[embed] set EMBED_MODEL in main.py to one of the above (without 'models/').")
+        else:
+            print("[embed] no embedContent-capable models returned for this key.")
+    except Exception as e:
+        print(f"[embed] could not list models: {e}")
+
+
 def _preflight():
     """Do one embedding call up front; raise with the real cause if it fails.
-    Catches a missing key, an invalid key, or a wrong endpoint before we churn
+    Catches a missing key, an invalid key, or a wrong model before we churn
     through hundreds of chunks."""
     from main import _embed_text, EMBED_MODEL, GEMINI_API_KEY
     if not GEMINI_API_KEY:
@@ -50,7 +72,9 @@ def _preflight():
     try:
         vec = _embed_text("preflight check", task_type="RETRIEVAL_DOCUMENT", raise_on_error=True)
     except Exception as e:
-        raise SystemExit(f"[embed] embedding API call failed ({EMBED_MODEL}): {e}")
+        print(f"[embed] embedding API call failed ({EMBED_MODEL}): {e}")
+        _list_embedding_models()
+        raise SystemExit(1)
     print(f"[embed] preflight OK — {EMBED_MODEL} returned a {len(vec)}-dim vector")
 
 

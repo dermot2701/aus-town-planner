@@ -352,7 +352,8 @@ def _score_chunk(query_tokens, chunk):
 
 # ── Semantic retrieval (embeddings) ───────────────────────────────────────────
 
-EMBED_MODEL = "text-embedding-004"
+EMBED_MODEL = "gemini-embedding-001"
+EMBED_DIM = 768  # gemini-embedding-001 supports 768/1536/3072; 768 keeps the index compact
 
 
 def _embed_text(text, task_type="RETRIEVAL_QUERY", raise_on_error=False):
@@ -372,6 +373,7 @@ def _embed_text(text, task_type="RETRIEVAL_QUERY", raise_on_error=False):
         "model": f"models/{EMBED_MODEL}",
         "content": {"parts": [{"text": text[:8000]}]},
         "taskType": task_type,
+        "outputDimensionality": EMBED_DIM,
     }).encode()
     req = urllib.request.Request(
         f"https://generativelanguage.googleapis.com/v1beta/models/"
