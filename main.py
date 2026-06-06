@@ -224,7 +224,7 @@ def _council_query_gemini(prompt: str) -> str:
     )
     data = _http_post_json(url, {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7},
+        "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.7},
     }, {})
     return data["candidates"][0]["content"]["parts"][0]["text"]
 
@@ -233,30 +233,27 @@ def _council_query_groq(prompt: str) -> str:
     data = _http_post_json("https://api.groq.com/openai/v1/chat/completions", {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1024,
+        "max_tokens": 1536,
         "temperature": 0.7,
     }, {"Authorization": f"Bearer {GROQ_API_KEY}"})
     return data["choices"][0]["message"]["content"]
 
 
 def _council_query_minimax(prompt: str) -> str:
-    data = _http_post_json("https://api.minimaxi.chat/v1/text/chatcompletion_v2", {
-        # MiniMax-Text-01 is the legacy model and isn't covered by the Plus plan
-        # (which covers the M-series) — it bills to the pay-as-you-go credit
-        # balance and 1008s when that's empty. Use a current, plan-covered model.
+    # MiniMax M2.7 via MiniMax's own API on **api.minimax.io** — the host the
+    # account's subscription/quota lives on (and the one OpenClaw uses). The
+    # earlier api.minimaxi.chat host billed a separate, empty wallet and 1008'd
+    # regardless of model. OpenAI-compatible chatcompletion_v2 schema.
+    data = _http_post_json("https://api.minimax.io/v1/text/chatcompletion_v2", {
         "model": "MiniMax-M2.7",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1024,
+        "max_tokens": 1536,
         "temperature": 0.7,
     }, {"Authorization": f"Bearer {MINIMAX_API_KEY}"})
     if data.get("choices"):
         return data["choices"][0]["message"]["content"]
-    if data.get("reply"):
-        return data["reply"]
-    # Empty choices means an API-level rejection. base_resp.status_code is the real
-    # signal (1004=auth, 1008=insufficient balance, 1002=rate limit, 1027=content
-    # risk); the input/output_sensitive flags flag moderation. Surface all of it
-    # unconditionally — status_msg is often blank even when status_code is set.
+    # Empty choices = API-level rejection; base_resp.status_code is the real signal
+    # (1004=auth, 1008=insufficient balance, 1002=rate limit, 1027=content risk).
     base = data.get("base_resp") or {}
     flags = {k: data[k] for k in ("input_sensitive", "output_sensitive",
                                   "input_sensitive_type", "output_sensitive_type")

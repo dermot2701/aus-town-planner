@@ -36,7 +36,7 @@ that's a client transport issue, not a stalled server (see the SSE notes in
 |-----|-------|------|---------|----------|
 | `gemini` | Gemini 2.5 Flash | Member + **Chair** (Stage 3) | `GEMINI_API_KEY` | `generativelanguage.googleapis.com` |
 | `groq` | Llama 3.3 70B (Groq) | Member | `GROQ_API_KEY` | `api.groq.com/openai/v1` |
-| `minimax` | MiniMax M2.7 | Member | `MINIMAX_API_KEY` | `api.minimaxi.chat/v1/text/chatcompletion_v2` |
+| `minimax` | MiniMax M2.7 | Member | `MINIMAX_API_KEY` | `api.minimax.io/v1/text/chatcompletion_v2` (model `MiniMax-M2.7`) |
 
 - A member is **active** only if its key is present. The council needs a
   **quorum of ≥2**; with fewer, the page shows a warning and disables the button.
@@ -89,27 +89,22 @@ produces 401, not 1010, so a 1010 is never the key.)
 
 ### MiniMax → `status_code=1008 status_msg='insufficient balance'`
 
-This appeared **even with ample subscription quota unused**. The cause was the
-**model name**, not the balance:
+This appeared on the **wrong host** (`api.minimaxi.chat`) **even with ample
+subscription quota unused**, and **persisted after switching to a plan-covered
+model (`MiniMax-M2.7`)** — which ruled out the model. The real cause was the
+**API host**: the account, subscription, and quota live on **`api.minimax.io`**,
+whereas `api.minimaxi.chat` is a separate platform whose wallet was empty, so it
+`1008`'d no matter the model. (OpenClaw works against the same key precisely
+because it points at `https://api.minimax.io`.)
 
-- MiniMax separates a **subscription plan quota** (covers the current model
-  family — M3 / M2.7 / image / speech / music) from a pay-as-you-go **credit
-  balance**. Credits are only consumed *after* the plan quota is exhausted.
-- We were calling the legacy **`MiniMax-Text-01`**, which is **not** in the plan's
-  model family — so billing skipped the plan quota, fell to the credit balance
-  (0), and rejected with `1008`.
+**Fix:** call MiniMax's own API on the correct host —
+`POST https://api.minimax.io/v1/text/chatcompletion_v2`, model **`MiniMax-M2.7`**,
+`Authorization: Bearer $MINIMAX_API_KEY` (OpenAI-compatible schema). No gateway,
+no extra key.
 
-**Fix:** call a plan-covered model. The app uses **`MiniMax-M2.7`** (the same
-model coding-agent clients like OpenClaw use successfully on the same account).
-
-> Model-string gotcha: gateways (OpenRouter / LiteLLM, and tools like OpenClaw)
-> use a provider-prefixed name `minimax/MiniMax-M2.7`. MiniMax's **native** API
-> (which this app calls directly) wants the **bare** `MiniMax-M2.7` — the
-> `minimax/` prefix would be rejected as an unknown model.
-
-MiniMax `base_resp.status_code` cheat-sheet: `1004` auth failed · `1008`
-insufficient balance · `1002` rate limit · `1027` output content risk
-(moderation).
+`base_resp.status_code` cheat-sheet: `1004` auth failed · `1008` insufficient
+balance · `1002` rate limit · `1027` output content risk (moderation). A `1008`
+that survives a host/model check points at the wrong account/host, not the model.
 
 ### "Connection lost — please try again" (client)
 

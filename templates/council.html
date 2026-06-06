@@ -13,53 +13,44 @@
   Council requires at least 2 models. Add API keys via Secret Manager:
   <code>GEMINI_API_KEY</code>{% if gemini %} ✓{% endif %},
   <code>GROQ_API_KEY</code>{% if groq %} ✓{% endif %},
-  <code>MINIMAX_API_KEY</code>{% if minimax %} ✓{% endif %}.
+  <code>MINIMAX_API_KEY</code>{% if minimax %} ✓{% endif %} (MiniMax M2.7).
 </div>
 {% endif %}
 
-<div class="grid-2" style="align-items:start;gap:20px">
-
-  <!-- ── Sidebar: input + model status ───────────────────────── -->
-  <div style="display:flex;flex-direction:column;gap:16px">
-    <div class="app-card app-card-padded">
-      <div class="app-card-header"><div class="app-section-title">Ask the Council</div></div>
-      <div class="form-group">
-        <textarea class="app-textarea" id="queryInput" rows="6"
-          placeholder="e.g. Can a short-stay accommodation use be approved in the General Residential zone in Kingborough? What permit pathway applies and what conditions would be appropriate?"></textarea>
-        <div class="form-hint">The council retrieves relevant clauses and decisions automatically.</div>
-      </div>
-      <button id="submitBtn" class="app-btn primary lg w-full" style="justify-content:center"
-        onclick="submitQuery()" {% if not has_quorum %}disabled{% endif %}>
-        Convene Council
-      </button>
-    </div>
-
-    <div class="app-card app-card-padded">
-      <div class="app-card-header"><div class="app-section-title">Council Members</div></div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        {% for key, m in models.items() %}
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-subtle)">
-          <div>
-            <div style="font-size:13px;color:var(--text-primary);font-weight:500">{{ m.label }}</div>
-            <div style="font-size:11px;color:var(--text-faint)">{{ 'Holly acting as Chair · Stage 3 synthesis' if m.chairman else 'Member · Stage 1 & 2' }}</div>
-          </div>
-          <span class="app-badge success">active</span>
-        </div>
-        {% endfor %}
-      </div>
-      <div style="font-size:11px;color:var(--text-faint);margin-top:8px">
-        Opinions are independent (no cross-contamination at Stage 1). Stage 2 reviews are anonymised.
-      </div>
+<!-- ── Input: full width across the top ──────────────────────── -->
+<div class="app-card app-card-padded" style="margin-bottom:20px">
+  <div class="app-card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <div class="app-section-title">Ask the Council</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      {% for key, m in models.items() %}
+      <span class="app-badge success"
+        title="{{ 'Holly acting as Chair · Stage 3 synthesis' if m.chairman else 'Member · Stage 1 & 2' }}">
+        {{ m.label }}{% if m.chairman %} · Chair{% endif %}
+      </span>
+      {% endfor %}
     </div>
   </div>
-
-  <!-- ── Main: 3-stage output ────────────────────────────────── -->
-  <div class="app-card app-card-padded" id="councilMain" style="min-height:480px;display:flex;align-items:center;justify-content:center">
-    <p class="text-faint" style="text-align:center;max-width:300px">
-      Submit a planning question to convene the council. The three-stage process takes 20–40 seconds.
-    </p>
+  <div class="form-group">
+    <textarea class="app-textarea" id="queryInput" rows="3"
+      placeholder="e.g. Can a short-stay accommodation use be approved in the General Residential zone in Kingborough? What permit pathway applies and what conditions would be appropriate?"></textarea>
   </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div class="form-hint" style="margin:0">
+      The council retrieves relevant clauses and decisions automatically. Opinions are independent;
+      Stage 2 reviews are anonymised. Takes 20–40s.
+    </div>
+    <button id="submitBtn" class="app-btn primary lg" style="white-space:nowrap"
+      onclick="submitQuery()" {% if not has_quorum %}disabled{% endif %}>
+      Convene Council
+    </button>
+  </div>
+</div>
 
+<!-- ── Output: full width below ──────────────────────────────── -->
+<div class="app-card app-card-padded" id="councilMain" style="min-height:420px;display:flex;align-items:center;justify-content:center">
+  <p class="text-faint" style="text-align:center;max-width:340px">
+    Submit a planning question to convene the council. The three-stage process takes 20–40 seconds.
+  </p>
 </div>
 {% endblock %}
 
@@ -74,9 +65,9 @@
   .stage-tab { padding:5px 12px; background:transparent; border:none; color:var(--text-faint); cursor:pointer; font-size:12px; font-weight:500; border-bottom:2px solid transparent; transition:all .15s }
   .stage-tab:hover { color:var(--text-primary) }
   .stage-tab.active { color:var(--accent); border-bottom-color:var(--accent) }
-  .stage-body { background:var(--bg); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:12px; font-size:13px; color:var(--text-secondary); line-height:1.7; white-space:pre-wrap; max-height:380px; overflow-y:auto; word-break:break-word }
+  .stage-body { background:var(--bg); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:16px; font-size:13.5px; color:var(--text-secondary); line-height:1.75; white-space:pre-wrap; max-height:70vh; overflow-y:auto; word-break:break-word }
   .stage-loading { font-size:13px; color:var(--text-faint); font-style:italic; text-align:center; padding:24px 0 }
-  .council-final { background:var(--bg); border:1px solid var(--accent); border-radius:var(--radius-md); padding:14px; font-size:13px; color:var(--text-secondary); line-height:1.7; white-space:pre-wrap; max-height:480px; overflow-y:auto }
+  .council-final { background:var(--bg); border:1px solid var(--accent); border-radius:var(--radius-md); padding:18px; font-size:14px; color:var(--text-secondary); line-height:1.8; white-space:pre-wrap; max-height:80vh; overflow-y:auto }
 </style>
 
 <script>
@@ -154,9 +145,15 @@ function handle(ev) {
   }
 }
 
+// An errored member (its text starts with "[Error") should not be the default
+// tab — a fast-failing member would otherwise hide the real answers behind it.
+function defaultKey(store, keys) {
+  return keys.find(k => !String(store[k].text).startsWith('[Error')) || keys[0];
+}
+
 function renderStage1() {
   const keys = Object.keys(s1);
-  const first = keys[0];
+  const first = defaultKey(s1, keys);
   let tabs = keys.map(k => `<button class="stage-tab${k===first?' active':''}" onclick="switchTab(this,'s1-${k}')">${escHtml(s1[k].label)}</button>`).join('');
   let panels = keys.map(k => `<div id="s1-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${escHtml(s1[k].text)}</div>`).join('');
   document.getElementById('stage1').innerHTML = `
@@ -174,7 +171,7 @@ function appendStage2Shell() {
 
 function renderStage2() {
   const keys = Object.keys(s2);
-  const first = keys[0];
+  const first = defaultKey(s2, keys);
   let tabs = keys.map(k => `<button class="stage-tab${k===first?' active':''}" onclick="switchTab(this,'s2-${k}')">${escHtml(s2[k].label)}</button>`).join('');
   let panels = keys.map(k => `<div id="s2-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${escHtml(s2[k].text)}</div>`).join('');
   document.getElementById('stage2').innerHTML = `
