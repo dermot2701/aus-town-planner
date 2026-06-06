@@ -74,26 +74,56 @@ def _today():
     return datetime.date.today().isoformat()
 
 
-def _get(url, as_json=False):
-    """Throttled, cached GET to the TPSO API. Returns parsed JSON or text."""
+# The TPSO server intermittently returns its SPA error shell ("This website
+# requires Javascript to run") instead of the API payload. It's short and never
+# valid content, so we detect it, never cache it, and retry on it.
+_ERROR_MARKERS = ("This website requires Javascript to run", "<title>Error")
+
+
+def _is_error_page(text):
+    return len(text) < 400 or any(m in text for m in _ERROR_MARKERS)
+
+
+def _fetch(url):
+    req = urllib.request.Request(url, headers=_HEADERS)
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = resp.read()
+    try:
+        data = gzip.decompress(data)
+    except (OSError, gzip.BadGzipFile):
+        pass
+    return data.decode("utf-8", errors="replace")
+
+
+def _get(url, as_json=False, retries=4):
+    """Throttled, cached GET to the TPSO API. Returns parsed JSON or text.
+
+    Retries on the transient error shell and only caches good responses, so a
+    flaky fetch never gets pinned in the cache. Pass retries=0 for discovery
+    probes, where an error shell legitimately means "no such scheme".
+    """
     os.makedirs(CACHE_DIR, exist_ok=True)
     key = "".join(c if c.isalnum() else "_" for c in url)[-180:]
     path = os.path.join(CACHE_DIR, key + ".txt")
     if os.path.exists(path):
         with open(path) as f:
-            text = f.read()
-    else:
-        req = urllib.request.Request(url, headers=_HEADERS)
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = resp.read()
-        try:
-            data = gzip.decompress(data)
-        except (OSError, gzip.BadGzipFile):
-            pass
-        text = data.decode("utf-8", errors="replace")
+            cached = f.read()
+        if not _is_error_page(cached):            # ignore a previously-cached error
+            return json.loads(cached) if as_json else cached
+
+    delay = 2.0
+    text = _fetch(url)
+    attempt = 0
+    while _is_error_page(text) and attempt < retries:
+        time.sleep(delay)
+        delay = min(delay * 2, 16.0)
+        attempt += 1
+        text = _fetch(url)
+
+    if not _is_error_page(text):                  # cache good responses only
         with open(path, "w") as f:
             f.write(text)
-        time.sleep(THROTTLE_SECONDS)
+    time.sleep(THROTTLE_SECONDS)
     return json.loads(text) if as_json else text
 
 
@@ -201,26 +231,44 @@ def _municipality(title):
     return title.split("-")[-1].strip() if "-" in title else title.strip()
 
 
+# Stop discovery after this many consecutive ids yield no LPS scheme, so a probe
+# doesn't grind through dozens of non-existent ids (the scheme ids are contiguous).
+_DISCOVER_MISS_LIMIT = 8
+
+
 def discover(id_range):
-    """Probe /init across id_range; return [{id, municipality, root}] for LPS schemes."""
+    """Probe /init across id_range; return [{id, municipality, root}] for LPS schemes.
+
+    Probes fail fast (retries=0): an error shell here means "no such scheme".
+    Stops after _DISCOVER_MISS_LIMIT consecutive misses.
+    """
     found = []
+    misses = 0
     for sid in id_range:
         try:
-            init = _get(f"{TPSO_BASE}/{sid}/init", as_json=True)
-        except urllib.error.HTTPError as e:
-            if e.code in (404, 500):
-                continue
-            print(f"[lps] /{sid}/init error: {e}")
+            init = _get(f"{TPSO_BASE}/{sid}/init", as_json=True, retries=0)
+        except (urllib.error.HTTPError, json.JSONDecodeError, ValueError):
+            misses += 1
+            if misses >= _DISCOVER_MISS_LIMIT:
+                break
             continue
         except Exception as e:
             print(f"[lps] /{sid}/init error: {e}")
+            misses += 1
+            if misses >= _DISCOVER_MISS_LIMIT:
+                break
             continue
         if init.get("planningSchemeTypeName") != "Local Provisions Schedule":
+            misses += 1
+            if misses >= _DISCOVER_MISS_LIMIT:
+                break
             continue
-        muni = _municipality(init.get("title", f"scheme {sid}"))
         root = init.get("openSectionId")
         if not root:
+            misses += 1
             continue
+        misses = 0
+        muni = _municipality(init.get("title", f"scheme {sid}"))
         found.append({"id": sid, "municipality": muni, "root": root})
         print(f"[lps]   {sid} -> {muni} (LPS root section {root})")
     return found
@@ -229,10 +277,14 @@ def discover(id_range):
 def ingest_scheme(sid, municipality, root, effective):
     url = (f"{TPSO_BASE}/{sid}/section/{root}/html"
            f"?effectiveForDate={effective}&includeChildren=true")
-    html = _get(url)
+    html = _get(url, retries=4)
     text = _html_to_text(html)
     chunks = chunk_lps(text, municipality)
-    print(f"[lps] {municipality}: {len(chunks)} LPS clauses")
+    if not chunks:
+        print(f"[lps] {municipality}: 0 clauses — fetch returned no parseable content "
+              f"(transient server error?). Re-run --scheme-id {sid} to retry.")
+    else:
+        print(f"[lps] {municipality}: {len(chunks)} LPS clauses")
     return chunks
 
 
