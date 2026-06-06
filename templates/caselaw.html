@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Case Review{% endblock %}
+{% block breadcrumb %}Case Review{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1 class="page-title">Legal Case Review</h1>
+  <p class="page-sub">Paste a TASCAT or TASRMPAT decision — Holly will produce a structured analysis. {{ caveat }}</p>
+</header>
+
+<div class="grid-2" style="align-items:start">
+
+  <!-- ── Input form ─────────────────────────────────────────────── -->
+  <form method="POST" action="{{ url_for('caselaw') }}" class="app-card app-card-padded">
+    <div class="app-card-header"><div class="app-section-title">Decision text</div></div>
+    {% if not gemini %}
+    <div class="app-alert warning" style="margin-bottom:12px">No Gemini API key — case analysis is offline.</div>
+    {% endif %}
+    <div class="form-group">
+      <label class="form-label" for="citation">Citation (optional)</label>
+      <input class="app-input" type="text" id="citation" name="citation" value="{{ citation }}" placeholder="e.g. [2024] TASCAT 47">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="case_text">Decision text</label>
+      <textarea class="app-textarea" id="case_text" name="case_text" rows="12"
+        placeholder="Paste the full decision text from AustLII here. Holly will extract the statutory framework, findings, and implications.">{{ case_text }}</textarea>
+      <div class="form-hint">Longer text → more accurate analysis. Paste the full decision where possible.</div>
+    </div>
+    <button type="submit" class="app-btn primary lg w-full" style="justify-content:center" {% if not gemini %}disabled{% endif %}>Analyse decision</button>
+  </form>
+
+  <!-- ── Result ──────────────────────────────────────────────────── -->
+  <div>
+    {% if error %}
+    <div class="app-card app-card-padded">
+      <div class="app-alert danger">{{ error }}</div>
+    </div>
+
+    {% elif review %}
+    <div class="app-card app-card-padded">
+
+      <div class="app-card-header">
+        <div>
+          <div class="app-section-title">{{ review.case_name or review.citation or 'Case Analysis' }}</div>
+          {% if review.citation %}<div style="font-size:11px;color:var(--text-faint);font-family:var(--font-mono);margin-top:2px">{{ review.citation }}</div>{% endif %}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          {% if review.decision_outcome %}
+          <span class="app-badge {{ 'success' if review.decision_outcome in ['Upheld','Permit granted'] else ('danger' if review.decision_outcome == 'Refused' else 'warning') }}">{{ review.decision_outcome }}</span>
+          {% endif %}
+          {% if review.jurisdiction %}<span class="app-tag">{{ review.jurisdiction }}</span>{% endif %}
+        </div>
+      </div>
+
+      {% if review.date %}<div style="font-size:12px;color:var(--text-faint);margin-bottom:12px">{{ review.date }}</div>{% endif %}
+
+      <!-- Executive Summary -->
+      {% if review.executive_summary %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Executive Summary</div>
+      <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;border:1px solid var(--border-subtle)">
+        {% if review.executive_summary.core_issue %}<div style="margin-bottom:6px"><strong style="color:var(--text-primary)">Issue:</strong> {{ review.executive_summary.core_issue }}</div>{% endif %}
+        {% if review.executive_summary.key_takeaway %}<div><strong style="color:var(--text-primary)">Takeaway:</strong> {{ review.executive_summary.key_takeaway }}</div>{% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Statutory Framework -->
+      {% if review.statutory_framework %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Statutory & Policy Framework</div>
+      <table class="app-table">
+        <tbody>
+          {% if review.statutory_framework.relevant_act %}<tr><td style="color:var(--text-faint);width:38%">Relevant act</td><td>{{ review.statutory_framework.relevant_act }}</td></tr>{% endif %}
+          {% if review.statutory_framework.planning_scheme_zone %}<tr><td style="color:var(--text-faint)">Scheme / Zone</td><td>{{ review.statutory_framework.planning_scheme_zone }}</td></tr>{% endif %}
+          {% if review.statutory_framework.overlays %}<tr><td style="color:var(--text-faint)">Overlays / Provisions</td><td>{{ review.statutory_framework.overlays }}</td></tr>{% endif %}
+          {% if review.primary_subject %}<tr><td style="color:var(--text-faint)">Subject</td><td>{{ review.primary_subject }}</td></tr>{% endif %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      <!-- Factual Background -->
+      {% if review.factual_background %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Background & Procedural History</div>
+      {% if review.factual_background.proposal %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px"><strong style="color:var(--text-muted)">Proposal:</strong> {{ review.factual_background.proposal }}</div>{% endif %}
+      {% if review.factual_background.authority_decision %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px"><strong style="color:var(--text-muted)">Authority decision:</strong> {{ review.factual_background.authority_decision }}</div>{% endif %}
+      {% if review.factual_background.grounds_for_appeal %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6"><strong style="color:var(--text-muted)">Grounds for appeal:</strong> {{ review.factual_background.grounds_for_appeal }}</div>{% endif %}
+      {% endif %}
+
+      <!-- Tribunal Findings -->
+      {% if review.tribunal_findings %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Findings & Legal Reasoning</div>
+      {% if review.tribunal_findings.scheme_interpretation %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px"><strong style="color:var(--text-muted)">Scheme interpretation:</strong> {{ review.tribunal_findings.scheme_interpretation }}</div>{% endif %}
+      {% if review.tribunal_findings.discretionary_powers %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px"><strong style="color:var(--text-muted)">Discretion:</strong> {{ review.tribunal_findings.discretionary_powers }}</div>{% endif %}
+      {% if review.tribunal_findings.public_interests %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6"><strong style="color:var(--text-muted)">Public / third-party interests:</strong> {{ review.tribunal_findings.public_interests }}</div>{% endif %}
+      {% endif %}
+
+      <!-- Precedent -->
+      {% if review.precedent %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Precedent & Application</div>
+      {% if review.precedent.test_applied %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px"><strong style="color:var(--text-muted)">Test applied:</strong> {{ review.precedent.test_applied }}</div>{% endif %}
+      {% if review.precedent.local_application %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6"><strong style="color:var(--text-muted)">Local application:</strong> {{ review.precedent.local_application }}</div>{% endif %}
+      {% endif %}
+
+      <!-- Implications -->
+      {% if review.implications %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Actionable Implications</div>
+      <div class="grid-2" style="gap:10px">
+        {% if review.implications.for_applicants %}
+        <div style="background:var(--bg);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:10px 12px">
+          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px;font-weight:600;letter-spacing:.04em">FOR APPLICANTS</div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.6">{{ review.implications.for_applicants }}</div>
+        </div>
+        {% endif %}
+        {% if review.implications.for_authorities %}
+        <div style="background:var(--bg);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:10px 12px">
+          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px;font-weight:600;letter-spacing:.04em">FOR ASSESSMENT OFFICERS</div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.6">{{ review.implications.for_authorities }}</div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Status -->
+      {% if review.status %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Status & Next Steps</div>
+      {% if review.status.appeal_window %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px"><strong style="color:var(--text-muted)">Appeal window:</strong> {{ review.status.appeal_window }}</div>{% endif %}
+      {% if review.status.recommended_actions %}<div style="font-size:13px;color:var(--text-secondary);line-height:1.6"><strong style="color:var(--text-muted)">Recommended actions:</strong> {{ review.status.recommended_actions }}</div>{% endif %}
+      {% endif %}
+
+      <div class="app-alert warning" style="margin-top:14px">{{ caveat }}</div>
+
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--text-faint)">Raw JSON output</summary>
+        <pre style="background:var(--bg);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:12px;font-size:11px;overflow:auto;color:var(--text-secondary)">{{ review | tojson(indent=2) }}</pre>
+      </details>
+    </div>
+
+    {% else %}
+    <div class="app-card app-card-padded" style="height:100%;display:flex;align-items:center;justify-content:center">
+      <p class="text-faint" style="text-align:center;max-width:300px">
+        Paste a TASCAT or TASRMPAT decision to generate a structured case analysis — statutory framework, findings, precedent value, and actionable implications for applicants and assessment officers.
+      </p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

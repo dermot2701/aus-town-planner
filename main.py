@@ -15,10 +15,11 @@ import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from functools import wraps
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, flash, jsonify, abort,
+    session, flash, jsonify, abort, Response, stream_with_context,
 )
 from werkzeug.security import check_password_hash
 
@@ -150,6 +151,108 @@ def inject_globals():
 # prose; always extract JSON via re.search(r'\{.*\}', text, re.DOTALL).
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY")
+
+_COUNCIL_MODELS = {
+    "gemini":  {"label": "Gemini 2.5 Flash",     "chairman": True},
+    "groq":    {"label": "Llama 3.3 70B (Groq)", "chairman": False},
+    "minimax": {"label": "MiniMax-01",            "chairman": False},
+}
+
+_COUNCIL_MEMBER_SYSTEM = (
+    "You are a Tasmanian statutory planning specialist on a multi-expert council. "
+    "Assess the planning question using ONLY the scheme clauses and TASCAT decisions in CONTEXT. "
+    "Cite every claim to a clause ID or case citation. Do not invent standards or holdings. "
+    "Be concise (300–400 words) and structured. "
+    "End with: '" + CAVEAT + "'"
+)
+
+_COUNCIL_CHAIRMAN_PREAMBLE = (
+    "You are the Chairman of a Tasmanian planning assessment council. "
+    "Synthesise the council members' assessments into a single definitive response for a statutory planner. "
+    "Incorporate the strongest insights, resolve any disagreements, and cite clause IDs and TASCAT citations raised. "
+    "End with: '" + CAVEAT + "'"
+)
+
+
+def _council_active_members():
+    """Return {model_key: config} for models with configured API keys."""
+    active = {}
+    if GEMINI_API_KEY:
+        active["gemini"] = _COUNCIL_MODELS["gemini"]
+    if GROQ_API_KEY:
+        active["groq"] = _COUNCIL_MODELS["groq"]
+    if MINIMAX_API_KEY:
+        active["minimax"] = _COUNCIL_MODELS["minimax"]
+    return active
+
+
+def _council_query_gemini(prompt: str) -> str:
+    import urllib.request
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    )
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7},
+    }).encode()
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read())
+    return data["candidates"][0]["content"]["parts"][0]["text"]
+
+
+def _council_query_groq(prompt: str) -> str:
+    import urllib.request
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    payload = json.dumps({
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1024,
+        "temperature": 0.7,
+    }).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+    })
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read())
+    return data["choices"][0]["message"]["content"]
+
+
+def _council_query_minimax(prompt: str) -> str:
+    import urllib.request
+    url = "https://api.minimaxi.chat/v1/text/chatcompletion_v2"
+    payload = json.dumps({
+        "model": "MiniMax-Text-01",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1024,
+        "temperature": 0.7,
+    }).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+    })
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read())
+    if "choices" in data and data["choices"]:
+        return data["choices"][0]["message"]["content"]
+    if "reply" in data:
+        return data["reply"]
+    raise ValueError(f"Unexpected MiniMax response: {list(data.keys())}")
+
+
+def _council_query(model_key: str, prompt: str) -> str:
+    if model_key == "gemini":
+        return _council_query_gemini(prompt)
+    if model_key == "groq":
+        return _council_query_groq(prompt)
+    if model_key == "minimax":
+        return _council_query_minimax(prompt)
+    raise ValueError(f"Unknown council model: {model_key}")
+
 
 _GEMINI_SYSTEM = (
     "You are a Tasmanian town-planning assessment assistant. You review a "
@@ -174,12 +277,45 @@ _GEMINI_SYSTEM = (
 )
 
 
-def _gemini_model():
+def _gemini_model(system=None):
+    """Single Gemini factory. Returns a wrapper with .generate_content(prompt) -> response."""
     if not GEMINI_API_KEY:
         return None
-    import google.generativeai as genai
-    genai.configure(api_key=GEMINI_API_KEY)
-    return genai.GenerativeModel("gemini-2.5-flash", system_instruction=_GEMINI_SYSTEM)
+    instruction = _GEMINI_SYSTEM if system is None else (system or None)
+
+    class _Response:
+        def __init__(self, text):
+            self.text = text
+
+    class _Wrapper:
+        def generate_content(self, prompt):
+            import urllib.request as _ur
+            payload = {"contents": [{"parts": [{"text": prompt}]}],
+                       "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.7}}
+            if instruction:
+                payload["system_instruction"] = {"parts": [{"text": instruction}]}
+            req = _ur.Request(
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}",
+                data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            with _ur.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read())
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return _Response(text)
+
+    return _Wrapper()
+
+
+def _skills_context():
+    """Return a compact skills-framework string for inclusion in Gemini prompts."""
+    data = load_json("skills.json")
+    lines = ["Planner competency framework (audience context):"]
+    for s in data.get("skills", []):
+        titles = ", ".join(c["title"] for c in s.get("competencies", []))
+        lines.append(f"  {s['number']}. {s['title']}: {titles}.")
+    return "\n".join(lines)
 
 
 # ── Retrieval ─────────────────────────────────────────────────────────────────
@@ -496,12 +632,31 @@ def api_review():
 
 _HOLLY_SYSTEM = (
     "You are Holly, a Tasmanian planning specialist assistant embedded in TasPlan Review. "
+    "Your audience is qualified statutory planners with competencies in scheme interpretation, "
+    "development assessment, conditions drafting, referral management, and LUPAA procedure. "
     "Answer questions about the Tasmanian Planning Scheme, LUPAA, TASCAT decisions, and "
-    "development assessment practice — but ONLY based on the CONTEXT supplied below. "
+    "development assessment practice — but ONLY based on the CONTEXT supplied. "
     "Cite every claim to a clause ID or TASCAT citation from that context. "
     "If the context is insufficient, say so clearly and explain what information is needed. "
     "Never invent clause numbers, standards, or case holdings. "
     "End every response with the caveat: '" + CAVEAT + "'"
+)
+
+_CASELAW_SYSTEM = (
+    "You are a Tasmanian planning law analyst. Analyse a planning tribunal decision and "
+    "return a SINGLE JSON object with exactly these keys: "
+    "case_name (string), citation (string), date (string), jurisdiction (string), "
+    "primary_subject (string), decision_outcome (one of: Upheld|Set aside|Modified|Refused|Permit granted|Remitted), "
+    "executive_summary ({core_issue, key_takeaway}), "
+    "statutory_framework ({relevant_act, planning_scheme_zone, overlays}), "
+    "factual_background ({proposal, authority_decision, grounds_for_appeal}), "
+    "tribunal_findings ({scheme_interpretation, discretionary_powers, public_interests}), "
+    "precedent ({test_applied, local_application}), "
+    "implications ({for_applicants, for_authorities}), "
+    "status ({appeal_window, recommended_actions}). "
+    "Ground every field in the decision text supplied. If a field cannot be determined, use null. "
+    "Focus on LUPAA, the Tasmanian Planning Scheme, and TASCAT/TASRMPAT procedure. "
+    "Return JSON only — no prose outside the object."
 )
 
 
@@ -522,11 +677,11 @@ def ask_holly():
         question = request.form.get("question", "").strip()
         if question:
             ctx = retrieve(query=question)
-            model = _gemini_model()
+            model = _gemini_model(system=_HOLLY_SYSTEM)
             if model:
                 prompt = (
-                    f"{_HOLLY_SYSTEM}\n\n"
-                    f"CONTEXT:\n{_format_context(ctx)}\n\n"
+                    f"{_skills_context()}\n\n"
+                    f"CONTEXT (scheme clauses and decisions — cite only these):\n{_format_context(ctx)}\n\n"
                     f"QUESTION: {question}"
                 )
                 try:
@@ -538,6 +693,143 @@ def ask_holly():
                 error = "No Gemini API key configured — Holly requires Gemini to answer questions."
     return render_template("ask.html", question=question, answer=answer, error=error,
                            gemini=bool(GEMINI_API_KEY))
+
+
+@app.route("/council")
+@login_required
+def council():
+    active = _council_active_members()
+    return render_template("council.html", models=active, has_quorum=len(active) >= 2,
+                           gemini=bool(GEMINI_API_KEY), groq=bool(GROQ_API_KEY),
+                           minimax=bool(MINIMAX_API_KEY))
+
+
+@app.route("/council/stream")
+@login_required
+def council_stream():
+    question = request.args.get("q", "").strip()
+
+    def generate():
+        def sse(payload):
+            return f"data: {json.dumps(payload)}\n\n"
+
+        if not question:
+            yield sse({"type": "error", "message": "No question provided."})
+            return
+
+        active = _council_active_members()
+        if len(active) < 2:
+            yield sse({"type": "error", "message": "Council requires at least 2 models. Configure GEMINI_API_KEY and GROQ_API_KEY."})
+            return
+
+        ctx = retrieve(query=question)
+        skills = _skills_context()
+        ctx_text = _format_context(ctx)
+        member_prompt = (
+            f"{_COUNCIL_MEMBER_SYSTEM}\n\n"
+            f"{skills}\n\n"
+            f"CONTEXT (cite only these):\n{ctx_text}\n\n"
+            f"PLANNING QUESTION: {question}"
+        )
+
+        # Stage 1 — parallel first opinions
+        yield sse({"type": "stage_start", "stage": 1, "message": "Gathering first opinions..."})
+        stage1 = {}
+        with ThreadPoolExecutor(max_workers=len(active)) as ex:
+            futures = {ex.submit(_council_query, k, member_prompt): k for k in active}
+            for fut in as_completed(futures):
+                k = futures[fut]
+                try:
+                    resp = fut.result()
+                except Exception as e:
+                    resp = f"[Error: {e}]"
+                stage1[k] = resp
+                yield sse({"type": "stage1_response", "model": k,
+                           "label": active[k]["label"], "response": resp})
+        yield sse({"type": "stage_complete", "stage": 1})
+
+        # Stage 2 — peer reviews (anonymised)
+        yield sse({"type": "stage_start", "stage": 2, "message": "Processing peer reviews..."})
+        anon = {f"Expert {i+1}": v for i, v in enumerate(stage1.values())}
+        anon_text = "\n\n".join(f"{k}:\n{v}" for k, v in anon.items())
+        review_prompt = (
+            "You are a Tasmanian planning specialist reviewing peer assessments. "
+            "Rank the following responses by: accuracy, completeness, and practical usefulness. "
+            "Be specific and concise (200–300 words).\n\n"
+            f"QUESTION: {question}\n\nPEER RESPONSES:\n{anon_text}\n\nYour ranking:"
+        )
+        stage2 = {}
+        with ThreadPoolExecutor(max_workers=len(active)) as ex:
+            futures = {ex.submit(_council_query, k, review_prompt): k for k in active}
+            for fut in as_completed(futures):
+                k = futures[fut]
+                try:
+                    rev = fut.result()
+                except Exception as e:
+                    rev = f"[Error: {e}]"
+                stage2[k] = rev
+                yield sse({"type": "stage2_review", "model": k,
+                           "label": active[k]["label"], "review": rev})
+        yield sse({"type": "stage_complete", "stage": 2})
+
+        # Stage 3 — chairman synthesis (always Gemini)
+        yield sse({"type": "stage_start", "stage": 3, "message": "Chairman synthesising..."})
+        s1_text = "\n\n".join(f"{active[k]['label']}:\n{v}" for k, v in stage1.items())
+        s2_text = "\n\n".join(f"{active[k]['label']} review:\n{v}" for k, v in stage2.items())
+        chairman_prompt = (
+            f"{_COUNCIL_CHAIRMAN_PREAMBLE}\n\n"
+            f"QUESTION: {question}\n\n"
+            f"COUNCIL FIRST OPINIONS:\n{s1_text}\n\n"
+            f"PEER REVIEWS:\n{s2_text}\n\n"
+            "FINAL SYNTHESIS:"
+        )
+        try:
+            final = _council_query_gemini(chairman_prompt)
+        except Exception as e:
+            final = f"[Synthesis error: {e}]"
+        yield sse({"type": "stage3_final", "response": final})
+        yield sse({"type": "stage_complete", "stage": 3})
+        yield sse({"type": "council_complete"})
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.route("/caselaw", methods=["GET", "POST"])
+@login_required
+def caselaw():
+    review = None
+    citation = ""
+    case_text = ""
+    error = None
+    if request.method == "POST":
+        citation = request.form.get("citation", "").strip()
+        case_text = request.form.get("case_text", "").strip()
+        if not case_text:
+            flash("Paste the decision text to analyse.", "warning")
+        else:
+            model = _gemini_model(system=_CASELAW_SYSTEM)
+            if model:
+                header = f"Citation: {citation}\n\n" if citation else ""
+                prompt = (
+                    f"{_skills_context()}\n\n"
+                    f"DECISION TEXT:\n{header}{case_text[:20000]}"
+                )
+                try:
+                    resp = model.generate_content(prompt)
+                    match = re.search(r"\{.*\}", resp.text.strip(), re.DOTALL)
+                    review = json.loads(match.group() if match else resp.text)
+                    if citation and not review.get("citation"):
+                        review["citation"] = citation
+                except Exception as e:
+                    error = f"Analysis failed: {e}"
+            else:
+                error = "No Gemini API key configured — case analysis requires Gemini."
+    return render_template("caselaw.html", review=review, citation=citation,
+                           case_text=case_text, error=error, gemini=bool(GEMINI_API_KEY))
 
 
 @app.route("/admin")
