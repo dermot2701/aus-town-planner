@@ -1,0 +1,106 @@
+{
+  "title": "Town Planning & Development Assessment: Skills Profile",
+  "description": "Competency framework for statutory planning and development assessment practice in Tasmania.",
+  "skills": [
+    {
+      "id": "statutory-planning",
+      "number": "1",
+      "title": "Statutory Planning & Legislation",
+      "summary": "Competence in navigating and interpreting planning legislation, local schemes, and regulatory frameworks.",
+      "competencies": [
+        {
+          "title": "Planning Scheme Interpretation",
+          "detail": "Ability to read and apply zoning ordinances, overlays, and development codes (e.g., Hobart Interim Planning Scheme)."
+        },
+        {
+          "title": "Statutory Compliance",
+          "detail": "Understanding of state-specific environmental and planning acts (e.g., Land Use Planning and Approvals Act 1993 in Tasmania)."
+        },
+        {
+          "title": "Delegated Authority",
+          "detail": "Knowledge of statutory timeframes, permitted/discretionary application pathways, and exemption criteria."
+        }
+      ]
+    },
+    {
+      "id": "development-assessment",
+      "number": "2",
+      "title": "Development Assessment (DA)",
+      "summary": "Skills involved in evaluating development applications and balancing competing stakeholder interests.",
+      "competencies": [
+        {
+          "title": "Application Review",
+          "detail": "Systematically assess application documents, architectural plans, and supporting technical reports (e.g., Traffic, Heritage, and Environmental Impact Assessments)."
+        },
+        {
+          "title": "Conditions Drafting",
+          "detail": "Ability to write clear, enforceable, and legally sound development permit conditions."
+        },
+        {
+          "title": "Referral Management",
+          "detail": "Effectively coordinate and synthesize feedback from internal council departments (e.g., Engineering, Environmental Health) and external referral agencies."
+        }
+      ]
+    },
+    {
+      "id": "strategic-planning",
+      "number": "3",
+      "title": "Strategic Planning & Policy",
+      "summary": "The ability to analyze data to support long-term urban growth and council visions.",
+      "competencies": [
+        {
+          "title": "Policy Formulation",
+          "detail": "Contribute to the drafting, amendment, and review of local strategic plans and policy documents."
+        },
+        {
+          "title": "Spatial Analysis",
+          "detail": "Proficiency in interpreting demographic, economic, and land-use data."
+        },
+        {
+          "title": "Urban Design Principles",
+          "detail": "Evaluate built form, landscaping, and subdivision layouts for spatial efficiency, accessibility, and community amenity."
+        }
+      ]
+    },
+    {
+      "id": "stakeholder-engagement",
+      "number": "4",
+      "title": "Stakeholder Engagement & Communication",
+      "summary": "Managing relationships between developers, government, and the public.",
+      "competencies": [
+        {
+          "title": "Public Notification",
+          "detail": "Facilitate and manage community consultation processes, handling public representations (objections/support) fairly and objectively."
+        },
+        {
+          "title": "Pre-Application Advice",
+          "detail": "Conduct meetings with applicants and property owners to provide constructive feedback and de-risk project proposals."
+        },
+        {
+          "title": "Report Writing & Presentation",
+          "detail": "Draft concise, impartial reports for council committees, elected members, or state planning commissions."
+        }
+      ]
+    },
+    {
+      "id": "project-management",
+      "number": "5",
+      "title": "Project & Time Management",
+      "summary": "Executing complex assessments within strict statutory timeframes.",
+      "competencies": [
+        {
+          "title": "Clock Management",
+          "detail": "Monitor assessment clock deadlines (e.g., statutory 42-day assessment periods for discretionary applications)."
+        },
+        {
+          "title": "Request for Further Information (RFI)",
+          "detail": "Identify information gaps and draft clear, justified RFIs to applicants."
+        },
+        {
+          "title": "Conflict Resolution",
+          "detail": "Mediate between competing interests (developers, residents, council vision) to reach optimal planning outcomes."
+        }
+      ]
+    }
+  ]
+}

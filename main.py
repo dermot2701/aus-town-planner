@@ -505,6 +505,13 @@ _HOLLY_SYSTEM = (
 )
 
 
+@app.route("/skills")
+@login_required
+def skills():
+    content = load_json("skills.json")
+    return render_template("skills.html", content=content)
+
+
 @app.route("/ask", methods=["GET", "POST"])
 @login_required
 def ask_holly():
