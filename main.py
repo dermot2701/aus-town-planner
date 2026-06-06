@@ -278,15 +278,34 @@ _GEMINI_SYSTEM = (
 
 
 def _gemini_model(system=None):
-    """Single Gemini factory. Defaults to the review system instruction.
-    Pass system='holly', 'caselaw', or a string to use a different system prompt."""
+    """Single Gemini factory. Returns a wrapper with .generate_content(prompt) -> response."""
     if not GEMINI_API_KEY:
         return None
-    import google.generativeai as genai
-    genai.configure(api_key=GEMINI_API_KEY)
     instruction = _GEMINI_SYSTEM if system is None else (system or None)
-    kwargs = {"system_instruction": instruction} if instruction else {}
-    return genai.GenerativeModel("gemini-2.5-flash", **kwargs)
+
+    class _Response:
+        def __init__(self, text):
+            self.text = text
+
+    class _Wrapper:
+        def generate_content(self, prompt):
+            import urllib.request as _ur
+            payload = {"contents": [{"parts": [{"text": prompt}]}],
+                       "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.7}}
+            if instruction:
+                payload["system_instruction"] = {"parts": [{"text": instruction}]}
+            req = _ur.Request(
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}",
+                data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            with _ur.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read())
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return _Response(text)
+
+    return _Wrapper()
 
 
 def _skills_context():
