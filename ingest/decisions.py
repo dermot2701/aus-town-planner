@@ -41,7 +41,7 @@ import datetime
 import xml.etree.ElementTree as ET
 from urllib.parse import urljoin
 
-from . import fetch, write_data
+from . import fetch, write_data, read_data
 
 # AustLII migrated to www8.austlii.edu.au with cgi-bin paths.
 # www.austlii.edu.au year-index paths return 410 Gone.
@@ -51,10 +51,60 @@ FEED_PATHS = {
     "rmpat": "/cgi-bin/feed/au/cases/tas/TASRMPAT/",
 }
 DB_PATHS = {
-    "tascat": "/au/cases/tas/TASCAT/",
-    "rmpat": "/au/cases/tas/TASRMPAT/",
+    "tascat": "/cgi-bin/viewtoc/au/cases/tas/TASCAT/",
+    "rmpat": "/cgi-bin/viewtoc/au/cases/tas/TASRMPAT/",
 }
 DB_CITATION = {"tascat": "TASCAT", "rmpat": "TASRMPAT"}
+
+# Curated leading Resource & Planning precedents (AustLII "most cited" within the
+# TASCAT R&P stream). Fetched directly by viewdoc URL — bypasses the search
+# endpoint (CAPTCHA-gated) and year-index discovery. Add citations here as the
+# leading authorities evolve; `--seed` ingests exactly this list.
+SEED_CITATIONS = [
+    "[2023] TASCAT 114",   # Owens v Kingborough Council
+    "[2023] TASCAT 14",    # W Lashmar v Glamorgan Spring Bay Council
+    "[2022] TASCAT 41",    # A Wyminga v Glamorgan Spring Bay Council
+    "[2023] TASCAT 217",   # Ryan v Circular Head Council (No 4) — Robbins Island
+    "[2022] TASCAT 137",   # G Palmese v Hobart City Council
+    "[2021] TASCAT 4",     # McElwaine & Hamilton v West Tamar Council
+    "[2022] TASCAT 47",    # Cubitt & Powell v Launceston City Council
+    "[2022] TASCAT 128",   # Mt Wellington Cableway Co v Hobart City Council
+    "[2023] TASCAT 108",   # Craig Webb Pty Ltd v Launceston City Council
+    "[2022] TASCAT 60",    # D & L Plumb v Clarence City Council
+    "[2024] TASCAT 108",   # Webb v Kingborough Council
+    "[2023] TASCAT 67",    # Beauty Point Trading v West Tamar Council
+    "[2023] TASCAT 1",     # Recycal Pty Ltd v EPA Tasmania
+    "[2023] TASCAT 158",   # Jacobs v Hobart City Council
+    "[2023] TASCAT 27",    # S Cai v Launceston City Council
+    "[2023] TASCAT 90",    # Saltwater Lagoon v Glamorgan Spring Bay Council
+    "[2022] TASCAT 157",   # Julie Alexander v Hobart City Council
+    "[2024] TASCAT 43",    # Smith v Latrobe Council
+    "[2022] TASCAT 79",    # Chau Nominees v Hobart City Council
+]
+
+_CITATION_RE = re.compile(r"\[(\d{4})\]\s+(TASCAT|TASRMPAT)\s+(\d+)")
+
+
+def _seed_records(citations):
+    """Convert ['[2023] TASCAT 114', ...] into discovery records with viewdoc URLs."""
+    out, seen = [], set()
+    for cit in citations:
+        m = _CITATION_RE.search(cit)
+        if not m:
+            print(f"[decisions] seed: unparseable citation {cit!r}")
+            continue
+        year, trib, num = m.group(1), m.group(2), m.group(3)
+        db = "tascat" if trib == "TASCAT" else "rmpat"
+        key = (db, year, num)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "citation": f"[{year}] {trib} {num}",
+            "url": f"{AUSTLII_BASE}/cgi-bin/viewdoc/au/cases/tas/{trib}/{year}/{num}.html",
+            "db": db,
+        })
+    return out
 
 # Catchwords that mark a planning / Resource & Planning matter. TASCAT also hears
 # guardianship, health, anti-discrimination etc. — those are filtered out.
@@ -145,22 +195,28 @@ def _parse_feed(xml_text, db, year_from, year_to):
 def discover(db, year_from, year_to):
     """Return [{citation, url, db}] for one tribunal across a year range.
 
-    Primary: RSS feed at www8.austlii.edu.au/cgi-bin/feed/...
-    Fallback: year-based HTML index (may be unavailable on the new host).
+    Uses BOTH the RSS feed (recent cases) and year-index pages (full archive),
+    deduplicating by case number so each case appears once.
     """
+    seen = set()  # case numbers already added
+    out = []
+
+    # 1. RSS feed — catches the most recent cases quickly
     feed_url = AUSTLII_BASE + FEED_PATHS[db]
     try:
         xml_text = fetch(feed_url)
-        out = _parse_feed(xml_text, db, year_from, year_to)
-        if out:
-            print(f"[decisions] {db} feed: {len(out)} cases ({year_from}–{year_to})")
-            return out
-        print(f"[decisions] {db} feed: no cases in range {year_from}–{year_to}, trying year index")
+        rss = _parse_feed(xml_text, db, year_from, year_to)
+        for r in rss:
+            num_m = re.search(r"/(\d+)\.html", r["url"])
+            key = num_m.group(1) if num_m else r["url"]
+            if key not in seen:
+                seen.add(key)
+                out.append(r)
+        print(f"[decisions] {db} feed: {len(rss)} cases ({year_from}–{year_to})")
     except Exception as e:
-        print(f"[decisions] {db}: feed unreachable ({e}), trying year index")
+        print(f"[decisions] {db}: feed unreachable ({e})")
 
-    # Fallback: year-based HTML index
-    out = []
+    # 2. Year-index pages — full archive for each requested year
     for year in range(year_from, year_to + 1):
         index_url = AUSTLII_BASE + f"{DB_PATHS[db]}{year}/"
         try:
@@ -168,7 +224,7 @@ def discover(db, year_from, year_to):
         except Exception as e:
             print(f"[decisions] {db} {year}: index unreachable ({e})")
             continue
-        seen = set()
+        new = 0
         for href, num in _CASE_LINK_RE.findall(index):
             if num in seen:
                 continue
@@ -178,7 +234,8 @@ def discover(db, year_from, year_to):
                 "url": urljoin(index_url, href),
                 "db": db,
             })
-        print(f"[decisions] {db} {year}: {len(seen)} cases")
+            new += 1
+        print(f"[decisions] {db} {year}: {new} new cases from year-index")
     return out
 
 
@@ -295,6 +352,10 @@ def main():
     ap.add_argument("--limit", type=int, default=200, help="max cases to fetch (across all)")
     ap.add_argument("--no-gemini", action="store_true", help="skip the LLM pass even if a key is set")
     ap.add_argument("--local-dir", help="process locally saved HTML files instead of fetching from AustLII")
+    ap.add_argument("--seed", action="store_true",
+                    help="ingest the curated leading-precedent list (by viewdoc URL) instead of crawling")
+    ap.add_argument("--merge", action="store_true",
+                    help="merge into the existing decisions.json (by citation) rather than overwrite")
     args = ap.parse_args()
 
     model = None if args.no_gemini else _gemini()
@@ -306,21 +367,26 @@ def main():
         if not decisions:
             print("[decisions] Nothing kept from local files.")
             return
-        write_data("decisions.json", {"decisions": decisions})
-        print(f"[decisions] done: {len(decisions)} planning decisions kept from local files.")
+        _write(decisions, merge=args.merge)
         return
 
-    dbs = ["tascat", "rmpat"] if args.db == "both" else [args.db]
-    found = []
-    for db in dbs:
-        found += discover(db, args.year_from, args.year_to)
+    # Seed mode — fetch the curated leading precedents directly
+    if args.seed:
+        found = _seed_records(SEED_CITATIONS)
+        print(f"[decisions] seed: {len(found)} curated precedents to fetch")
+    else:
+        dbs = ["tascat", "rmpat"] if args.db == "both" else [args.db]
+        found = []
+        for db in dbs:
+            found += discover(db, args.year_from, args.year_to)
+        found = found[: args.limit]
     if not found:
         print("[decisions] No cases discovered. Confirm network access to AustLII "
               "and the year range. SAMPLE corpus left in place.")
         return
 
     decisions, skipped = [], 0
-    for d in found[: args.limit]:
+    for d in found:
         try:
             text = _strip_html(fetch(d["url"]))
             if not _is_planning(text):
@@ -339,8 +405,26 @@ def main():
         print(f"[decisions] Nothing kept ({skipped} non-planning skipped); not overwriting corpus.")
         return
 
-    write_data("decisions.json", {"decisions": decisions})
-    print(f"[decisions] done: {len(decisions)} planning decisions kept, {skipped} skipped.")
+    _write(decisions, merge=args.merge, skipped=skipped)
+
+
+def _write(decisions, *, merge=False, skipped=0):
+    """Write decisions.json, optionally merging with the existing corpus by citation."""
+    if merge:
+        try:
+            existing = (read_data("decisions.json") or {}).get("decisions", [])
+        except Exception:
+            existing = []
+        by_cit = {d.get("citation"): d for d in existing if d.get("citation")}
+        for d in decisions:
+            by_cit[d["citation"]] = d  # new entries win
+        merged = list(by_cit.values())
+        write_data("decisions.json", {"decisions": merged})
+        print(f"[decisions] done: {len(decisions)} fetched, merged into corpus "
+              f"({len(merged)} total, {skipped} skipped).")
+    else:
+        write_data("decisions.json", {"decisions": decisions})
+        print(f"[decisions] done: {len(decisions)} planning decisions kept, {skipped} skipped.")
 
 
 if __name__ == "__main__":

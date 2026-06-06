@@ -1,0 +1,91 @@
+# Architecture
+
+TasPlan Review is a single-process Flask app that assesses a development proposal
+against the **Tasmanian Planning Scheme** (State Planning Provisions + Local
+Provisions Schedules) and **TASCAT** precedent, returning a grounded, cited
+assessment.
+
+> **Load-bearing caveat.** Every assessment carries:
+> *"Analytical aid only; not a statutory determination or legal advice."*
+> (`CAVEAT` in `main.py`). It appears in the UI and is stamped on every review.
+> Do not remove it.
+
+## Stack
+
+| Component | Detail |
+|-----------|--------|
+| Backend | Python 3.11 / Flask 3.x — everything in `main.py` (routes + helpers + review engine) |
+| Data | JSON files, read/written **only** via `load_json` / `save_json` |
+| Storage | Local `data/` dir, or Google Cloud Storage when `GCS_BUCKET` is set |
+| Auth | Session-based, Werkzeug password hashing, `@login_required` / `@admin_required` |
+| AI | Google Gemini (`gemini-2.5-flash`) via `_gemini_model()`; degrades gracefully without a key |
+| Embeddings | Gemini `text-embedding-004` (free tier) via `_embed_text()` |
+| Multi-LLM | Gemini + Llama (Groq) + MiniMax for the Planning Council |
+| Frontend | Jinja2 + Bootstrap 5 (layout only) + Palantir-dark design system (teal accent) |
+| Serving | Cloud Run → Gunicorn (1 worker, 8 threads). Domain `aus-planner.allbridge.com.au` |
+
+## Data access — the one rule
+
+**All reads/writes go through `load_json(filename)` / `save_json(filename, data)`**
+(`main.py:60`). These switch between the local `data/` directory and a GCS bucket
+based on the `GCS_BUCKET` env var. Never open JSON files directly.
+
+In production, files live at the **root** of `gs://aus-town-planner-data` — e.g.
+`load_json("users.json")` maps to `gs://aus-town-planner-data/users.json`, *not* a
+`data/` subfolder. **Deploys do NOT update GCS data** — re-ingested corpus must be
+uploaded manually with `gcloud storage cp`.
+
+## Data files
+
+| File | Shape | Written by |
+|------|-------|------------|
+| `app_config.json` | `{app_name, tagline, corpus_status, corpus_banner}` | Admin panel |
+| `users.json` | `{username: {name, role, password_hash}}` | `init_admin.py`, Admin panel |
+| `scheme_chunks.json` | `{chunks: [{clause_id, instrument, scope, kind, zone_or_code, title, text, keywords[], use_classes[], provenance}]}` | `ingest/scheme.py` |
+| `scheme_manifest.json` | `{provenance, sources[], municipalities_covered[], chunk_count, instruments[]}` | `ingest/scheme.py` |
+| `decisions.json` | `{decisions: [{citation, title, municipality, use_classes[], keywords[], summary, outcome, principle, provenance}]}` | `ingest/decisions.py` |
+| `decision_chunks.json` | `{chunks: [{chunk_id, citation, title, municipality, text, embedding[768]}]}` | `ingest/embed.py` |
+| `skills.json` | `{title, description, skills: [{id, number, title, summary, competencies[]}]}` | committed reference data |
+
+## Routes
+
+| Route | Auth | Purpose |
+|-------|------|---------|
+| `GET/POST /login`, `GET /logout` | — | Session auth |
+| `GET /` | login | Home / launch centre |
+| `GET /review`, `POST /api/review` | login | Submit a proposal → grounded JSON assessment |
+| `GET /scheme` | login | Browse/search SPP + LPS clauses, scoped by municipality |
+| `GET /decisions` | login | Keyword search of TASCAT decisions |
+| `GET/POST /caselaw` | login | Case Review — structured Gemini analysis of a pasted decision |
+| `GET/POST /ask` | login | Ask Holly — free-form planning Q&A |
+| `GET /council`, `GET /council/stream` | login | Planning Council — 3-stage multi-LLM debate (SSE) |
+| `GET /skills` | login | Planner competency framework |
+| `GET /admin` | admin | Corpus status, source manifest, user management |
+| `POST /admin/users/{add,edit,delete}` | admin | User CRUD |
+
+## AI surfaces
+
+| Surface | Model(s) | System instruction |
+|---------|----------|--------------------|
+| Review engine | Gemini (heuristic fallback) | `_GEMINI_SYSTEM` — JSON-only, grounded on retrieved context |
+| Ask Holly | Gemini | `_HOLLY_SYSTEM` — conversational planning advice |
+| Case Review | Gemini | `_CASELAW_SYSTEM` — structured JSON case analysis |
+| Planning Council | Gemini + Groq (Llama 3.3 70B) + MiniMax | `_COUNCIL_MEMBER_SYSTEM` / `_COUNCIL_CHAIRMAN_PREAMBLE` |
+
+`_gemini_model(system=None)` is the **single Gemini factory** — it calls the REST
+API directly (no SDK). Pass a system instruction for non-review surfaces. All
+Gemini JSON responses are parsed via `re.search(r'\{.*\}', text, re.DOTALL)`.
+
+## Environment variables
+
+| Var | Purpose | Default |
+|-----|---------|---------|
+| `SECRET_KEY` | Flask session secret | dev default — set in prod |
+| `GEMINI_API_KEY` | Gemini reviews, embeddings, Holly, Case Review, Council chairman | unset → heuristic |
+| `GROQ_API_KEY` | Council member (Llama 3.3 70B) | unset |
+| `MINIMAX_API_KEY` | Council member (MiniMax) | unset |
+| `GCS_BUCKET` | Use Cloud Storage instead of `data/` | unset → local |
+
+See [`SETUP.md`](SETUP.md) for deployment, [`REVIEW_ENGINE.md`](REVIEW_ENGINE.md)
+for how assessments are produced, and [`INGESTION.md`](INGESTION.md) for building
+the corpus.
