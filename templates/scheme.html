@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Planning Scheme{% endblock %}
+{% block breadcrumb %}Planning Scheme{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1 class="page-title">Planning Scheme</h1>
+  <p class="page-sub">Ingested State Planning Provisions and Local Provisions Schedules. {{ chunks|length }} clause{{ '' if chunks|length == 1 else 's' }} shown.</p>
+</header>
+
+<form method="GET" action="{{ url_for('scheme') }}" class="app-card app-card-padded" style="margin-bottom:20px">
+  <div class="form-row">
+    <div class="form-group" style="flex:2">
+      <label class="form-label" for="q">Search clauses</label>
+      <input class="app-input" type="text" id="q" name="q" value="{{ q }}" placeholder="e.g. bushfire, setback, visitor accommodation, height">
+    </div>
+    <div class="form-group" style="flex:1">
+      <label class="form-label" for="municipality">Municipality</label>
+      <select class="app-select" id="municipality" name="municipality">
+        <option value="">Statewide (SPP) + all</option>
+        {% for m in municipalities %}
+        <option value="{{ m }}" {{ 'selected' if m == municipality else '' }}>{{ m }} (+ SPP)</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="align-self:flex-end">
+      <button type="submit" class="app-btn primary">Search</button>
+    </div>
+  </div>
+</form>
+
+{% if not chunks %}
+<div class="app-card app-card-padded"><p class="text-faint" style="margin:0">No clauses match. Try a broader term or clear the municipality filter.</p></div>
+{% else %}
+<div class="accordion" data-accordion>
+  {% for c in chunks %}
+  <div class="accordion-item">
+    <button class="accordion-trigger" type="button" aria-expanded="false">
+      <span>
+        <span class="app-tag" style="margin-right:8px">{{ c.clause_id }}</span>
+        {{ c.title }}
+        <span class="app-badge {{ 'info' if c.instrument == 'SPP' else 'warning' }}" style="margin-left:8px">{{ c.instrument }}</span>
+        {% if c.scope != 'statewide' %}<span class="app-badge" style="margin-left:4px">{{ c.scope }}</span>{% endif %}
+        <span class="app-badge danger" style="margin-left:4px">{{ c.provenance }}</span>
+      </span>
+    </button>
+    <div class="accordion-body">
+      <div style="font-size:11px;color:var(--text-faint);font-family:var(--font-mono);margin-bottom:6px">{{ c.zone_or_code }} · {{ c.kind }}</div>
+      <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin:0 0 8px">{{ c.text }}</p>
+      {% if c.performance_criterion %}
+      <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin:0;padding-top:8px;border-top:1px solid var(--border-subtle)"><strong>Performance Criterion:</strong> {{ c.performance_criterion }}</p>
+      {% endif %}
+      {% if c.use_classes %}
+      <div style="margin-top:8px">{% for u in c.use_classes %}<span class="app-tag" style="margin-right:6px">{{ u }}</span>{% endfor %}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

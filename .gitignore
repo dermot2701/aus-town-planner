@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.env.*
+.venv/
+venv/
+*.pyc
+.DS_Store
+
+# Local progress log — not committed
+SCRATCH.md
+
+# Raw downloaded source PDFs / HTML cache from ingestion (large, re-fetchable)
+ingest/cache/
+
+# User store contains password hashes — created locally via init_admin.py
+data/users.json

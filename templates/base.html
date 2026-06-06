@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}Review{% endblock %} — {{ app_config.get('app_name', 'TasPlan Review') }}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <script src="{{ url_for('static', filename='js/ui.js') }}" defer></script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="app theme-dark">
+
+<a class="skip-link" href="#main-content">Skip to content</a>
+
+<!-- Toast stack -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="toast-stack" role="status" aria-live="polite" aria-atomic="true">
+  {% for category, message in messages %}
+  <div class="app-alert {{ category }}" data-autodismiss>{{ message }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="app-shell">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+  <nav class="app-sidebar" aria-label="Main navigation">
+    <div style="height:var(--topbar-h);display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border-subtle);flex-shrink:0">
+      <span style="font-weight:700;letter-spacing:.04em;color:var(--text-heading)">TasPlan<span style="color:var(--accent)"> Review</span></span>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Assess</div>
+      <a href="{{ url_for('home') }}" class="nav-item" data-page="/"
+         {% if request.path == '/' %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        Home
+      </a>
+      <a href="{{ url_for('review') }}" class="nav-item" data-page="/review"
+         {% if request.path.startswith('/review') %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Review a Proposal
+      </a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="{{ url_for('scheme') }}" class="nav-item" data-page="/scheme"
+         {% if request.path.startswith('/scheme') %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        Planning Scheme
+      </a>
+      <a href="{{ url_for('decisions') }}" class="nav-item" data-page="/decisions"
+         {% if request.path.startswith('/decisions') %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        TASCAT Decisions
+      </a>
+    </div>
+
+    {% if current_role == 'admin' %}
+    <div class="sidebar-section">
+      <div class="sidebar-label">System</div>
+      <a href="{{ url_for('admin') }}" class="nav-item" data-page="/admin"
+         {% if request.path.startswith('/admin') %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.4 14.1M4.93 4.93a10 10 0 0 0-1.4 14.1M12 2v2m0 18v-2m8.66-10H20M4 12H2"/></svg>
+        Admin / Ingestion
+      </a>
+    </div>
+    {% endif %}
+
+    <div class="sidebar-footer">
+      <div class="user-pill">
+        <div class="user-avatar" aria-hidden="true">{{ (current_name or current_user or 'U')[0].upper() }}</div>
+        <div class="user-info">
+          <div class="user-name">{{ current_name or current_user }}</div>
+          <div class="user-role">{{ current_role | capitalize }}</div>
+        </div>
+      </div>
+      <a href="{{ url_for('logout') }}" class="btn-signout" aria-label="Sign out">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="margin-right:6px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sign out
+      </a>
+    </div>
+  </nav>
+
+  <!-- ── Topbar ──────────────────────────────────────────────────────── -->
+  <header class="app-topbar">
+    <div class="topbar-crumb" aria-label="Breadcrumb">
+      <span class="current">{% block breadcrumb %}Home{% endblock %}</span>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-clock" id="live-clock" aria-live="off">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span class="clock-text">—</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Corpus + caveat banner (load-bearing) ───────────────────────── -->
+  {% if app_config.get('corpus_status') == 'SAMPLE' %}
+  <div class="app-alert warning" style="margin:0;border-radius:0;border-left:none;border-right:none">
+    <strong>SAMPLE corpus.</strong>&nbsp;{{ app_config.get('corpus_banner') }}&nbsp;{{ caveat }}
+  </div>
+  {% endif %}
+
+  <!-- ── Main ──────────────────────────────────────────────────────────── -->
+  <main class="app-main fade-in" id="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

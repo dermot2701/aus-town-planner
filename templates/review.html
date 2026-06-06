@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Review a Proposal{% endblock %}
+{% block breadcrumb %}Review a Proposal{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1 class="page-title">Review a Proposal</h1>
+  <p class="page-sub">Assess a development proposal against the ingested scheme and tribunal precedent. {{ caveat }}</p>
+</header>
+
+<div class="grid-2">
+  <!-- ── Proposal form ─────────────────────────────────────────────── -->
+  <form method="POST" action="{{ url_for('review') }}" class="app-card app-card-padded">
+    <div class="app-card-header"><div class="app-section-title">Proposal</div></div>
+    <div class="form-group">
+      <label class="form-label" for="municipality">Municipality</label>
+      <input class="app-input" type="text" id="municipality" name="municipality" value="{{ proposal.get('municipality','') }}" placeholder="e.g. Hobart, Kingborough, Glamorgan-Spring Bay">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="address_pid">Address / PID</label>
+      <input class="app-input" type="text" id="address_pid" name="address_pid" value="{{ proposal.get('address_pid','') }}" placeholder="e.g. 12 Example St, Sandy Bay (PID 1234567)">
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label class="form-label" for="zone">Zone (if known)</label>
+        <input class="app-input" type="text" id="zone" name="zone" value="{{ proposal.get('zone','') }}" placeholder="e.g. General Residential">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label" for="use_class">Proposed use class</label>
+        <input class="app-input" type="text" id="use_class" name="use_class" value="{{ proposal.get('use_class','') }}" placeholder="e.g. Visitor accommodation">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="description">Description</label>
+      <textarea class="app-textarea" id="description" name="description" rows="5" placeholder="Describe the development — built form, scale, site constraints (bushfire, coastal, waterway, scenic, heritage), etc.">{{ proposal.get('description','') }}</textarea>
+      <div class="form-hint">The richer the description, the better the retrieval. Mention any known site hazards.</div>
+    </div>
+    <button type="submit" class="app-btn primary lg w-full" style="justify-content:center">Run assessment</button>
+  </form>
+
+  <!-- ── Result ────────────────────────────────────────────────────── -->
+  <div>
+    {% if not result %}
+    <div class="app-card app-card-padded" style="height:100%;display:flex;align-items:center;justify-content:center">
+      <p class="text-faint" style="text-align:center;max-width:280px">Submit a proposal to generate a grounded, cited assessment. Every finding will be traceable to a clause ID or TASCAT citation.</p>
+    </div>
+    {% else %}
+    <div class="app-card app-card-padded">
+      <div class="app-card-header">
+        <div class="app-section-title">Assessment</div>
+        <span class="app-badge {{ 'danger' if result.risk_rating == 'high' else ('warning' if result.risk_rating == 'moderate' else 'success') }}">Risk: {{ result.risk_rating }}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-faint);font-family:var(--font-mono);margin-bottom:12px">
+        engine: {{ engine }}{% if not gemini %} (no Gemini key — deterministic){% endif %} · context: {{ result.context_sufficiency }}
+      </div>
+
+      <div class="grid-2" style="gap:10px;margin-bottom:12px">
+        <div><div class="kpi-label">Municipality</div><div style="font-size:13px;color:var(--text-primary)">{{ result.municipality }}</div></div>
+        <div><div class="kpi-label">Applicable zone</div><div style="font-size:13px;color:var(--text-primary)">{{ result.applicable_zone }}</div></div>
+        <div><div class="kpi-label">Use classification</div><div style="font-size:13px;color:var(--text-primary)"><span class="app-badge info">{{ result.use_classification }}</span></div></div>
+        <div><div class="kpi-label">Triggered codes</div><div style="font-size:13px;color:var(--text-primary)">{% if result.triggered_codes %}{% for t in result.triggered_codes %}<span class="app-tag" style="margin:2px 4px 2px 0">{{ t }}</span>{% endfor %}{% else %}None identified{% endif %}</div></div>
+      </div>
+
+      {% if result.pathway_basis %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Pathway basis</div>
+      {% for p in result.pathway_basis %}
+      <div style="font-size:13px;color:var(--text-secondary);line-height:1.5;margin-bottom:6px">{{ p.finding }} <span class="app-tag">{{ p.clause_id }}</span></div>
+      {% endfor %}
+      {% endif %}
+
+      {% if result.standards_assessment %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Standards assessment</div>
+      <table class="app-table">
+        <thead><tr><th>Standard</th><th>Clause</th><th>A met?</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for s in result.standards_assessment %}
+        <tr>
+          <td>{{ s.standard }}<div style="font-size:11px;color:var(--text-faint)">{{ s.performance_criterion_note }}</div></td>
+          <td><span class="app-tag">{{ s.clause_id }}</span></td>
+          <td>{{ '✓' if s.acceptable_solution_met else '—' }}</td>
+          <td><span class="app-badge {{ 'success' if s.status == 'compliant' else ('warning' if s.status == 'gap' else '') }}">{{ s.status }}</span></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      {% if result.compliance_gaps %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Compliance gaps</div>
+      <ul style="font-size:13px;color:var(--text-secondary);line-height:1.6;padding-left:18px;margin:0">
+        {% for g in result.compliance_gaps %}<li>{{ g }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if result.relevant_precedents %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Relevant precedent</div>
+      {% for p in result.relevant_precedents %}
+      <div style="font-size:13px;color:var(--text-secondary);line-height:1.5;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border-subtle)">
+        <span class="app-tag">{{ p.citation }}</span> <span class="app-badge">{{ p.outcome }}</span>
+        <div style="margin-top:4px">{{ p.principle }}</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:2px">{{ p.relevance }}</div>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if result.recommended_conditions_or_info %}
+      <div class="app-section-title" style="font-size:12px;margin:14px 0 6px">Recommended conditions / further info</div>
+      <ul style="font-size:13px;color:var(--text-secondary);line-height:1.6;padding-left:18px;margin:0">
+        {% for c in result.recommended_conditions_or_info %}<li>{{ c }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+
+      <div class="app-alert warning" style="margin-top:14px">{{ result.caveat }}</div>
+
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--text-faint)">Raw JSON output</summary>
+        <pre style="background:var(--bg);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:12px;font-size:11px;overflow:auto;color:var(--text-secondary)">{{ result | tojson(indent=2) }}</pre>
+      </details>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
