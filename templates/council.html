@@ -82,15 +82,15 @@
 <script>
 let es = null;
 let s1 = {}, s2 = {};
+let completed = false;   // council_complete received — a later close is normal
+let rendered = false;    // at least one stage response rendered
 const main = () => document.getElementById('councilMain');
-
-function sse(payload) { return `data: ${JSON.stringify(payload)}\n\n`; }
 
 function submitQuery() {
   const q = document.getElementById('queryInput').value.trim();
   if (!q) return;
   document.getElementById('submitBtn').disabled = true;
-  s1 = {}; s2 = {};
+  s1 = {}; s2 = {}; completed = false; rendered = false;
   if (es) es.close();
 
   main().style.cssText = 'padding:0';
@@ -105,38 +105,51 @@ function submitQuery() {
     try { handle(JSON.parse(e.data)); } catch(err) { console.error(err); }
   };
   es.onerror = () => {
-    es.close();
+    if (es) es.close();
     document.getElementById('submitBtn').disabled = false;
-    main().innerHTML = '<div class="app-alert danger" style="margin:0">Connection lost — please try again.</div>';
+    if (completed) return;                 // normal close after a finished run — ignore
+    if (rendered) {                        // keep partial results, don't wipe them
+      main().insertAdjacentHTML('beforeend',
+        '<div class="app-alert warning" style="margin-top:16px">Connection interrupted before the council finished — partial results are shown above.</div>');
+    } else {
+      main().style.cssText = '';
+      main().innerHTML = '<div class="app-alert danger" style="margin:0">Connection lost — please try again.</div>';
+    }
   };
 }
 
 function handle(ev) {
   if (ev.type === 'stage1_response') {
+    rendered = true;
     s1[ev.model] = {label: ev.label, text: ev.response};
     renderStage1();
   } else if (ev.type === 'stage_complete' && ev.stage === 1) {
-    document.getElementById('sn1').classList.add('done');
-    document.getElementById('sn1').textContent = '✓';
+    const sn = document.getElementById('sn1');
+    if (sn) { sn.classList.add('done'); sn.textContent = '✓'; }
     appendStage2Shell();
   } else if (ev.type === 'stage2_review') {
     s2[ev.model] = {label: ev.label, text: ev.review};
     renderStage2();
   } else if (ev.type === 'stage_complete' && ev.stage === 2) {
-    document.getElementById('sn2').classList.add('done');
-    document.getElementById('sn2').textContent = '✓';
+    const sn = document.getElementById('sn2');
+    if (sn) { sn.classList.add('done'); sn.textContent = '✓'; }
     appendStage3Shell();
   } else if (ev.type === 'stage3_final') {
-    document.getElementById('finalBody').textContent = ev.response;
+    const fb = document.getElementById('finalBody');
+    if (fb) { fb.textContent = ev.response; fb.style.display = 'block'; }
+    const loading = document.querySelector('#stage3 .stage-loading');
+    if (loading) loading.remove();
   } else if (ev.type === 'stage_complete' && ev.stage === 3) {
-    document.getElementById('sn3').classList.add('done');
-    document.getElementById('sn3').textContent = '✓';
+    const sn = document.getElementById('sn3');
+    if (sn) { sn.classList.add('done'); sn.textContent = '✓'; }
   } else if (ev.type === 'council_complete') {
-    es.close();
+    completed = true;
+    if (es) es.close();
     document.getElementById('submitBtn').disabled = false;
   } else if (ev.type === 'error') {
+    main().style.cssText = '';
     main().innerHTML = `<div class="app-alert danger" style="margin:0">${escHtml(ev.message)}</div>`;
-    es.close();
+    if (es) es.close();
     document.getElementById('submitBtn').disabled = false;
   }
 }
@@ -176,18 +189,6 @@ function appendStage3Shell() {
       <div class="stage-loading"><span class="live-dot"></span> Chairman synthesising...</div>
       <div class="council-final" id="finalBody" style="display:none"></div>
     </div>`);
-}
-
-// Override to show final body once text appears
-const origHandle = handle;
-function handle(ev) {
-  origHandle(ev);
-  if (ev.type === 'stage3_final') {
-    const fb = document.getElementById('finalBody');
-    if (fb) fb.style.display = 'block';
-    const loading = document.querySelector('#stage3 .stage-loading');
-    if (loading) loading.remove();
-  }
 }
 
 function switchTab(btn, panelId) {
