@@ -190,59 +190,60 @@ def _council_active_members():
     return active
 
 
-def _council_query_gemini(prompt: str) -> str:
+def _http_post_json(url: str, payload: dict, headers: dict, timeout: int = 60) -> dict:
+    """POST JSON and return parsed JSON. On an HTTP error, surface the response
+    body (providers explain *why* a 4xx happened there) instead of a bare code."""
     import urllib.request
+    import urllib.error
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode(),
+        headers={**headers, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:400]
+        raise RuntimeError(f"HTTP {e.code}: {body}") from None
+
+
+def _council_query_gemini(prompt: str) -> str:
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     )
-    payload = json.dumps({
+    data = _http_post_json(url, {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7},
-    }).encode()
-    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
+    }, {})
     return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def _council_query_groq(prompt: str) -> str:
-    import urllib.request
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    payload = json.dumps({
+    data = _http_post_json("https://api.groq.com/openai/v1/chat/completions", {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 1024,
         "temperature": 0.7,
-    }).encode()
-    req = urllib.request.Request(url, data=payload, headers={
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-    })
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
+    }, {"Authorization": f"Bearer {GROQ_API_KEY}"})
     return data["choices"][0]["message"]["content"]
 
 
 def _council_query_minimax(prompt: str) -> str:
-    import urllib.request
-    url = "https://api.minimaxi.chat/v1/text/chatcompletion_v2"
-    payload = json.dumps({
+    data = _http_post_json("https://api.minimaxi.chat/v1/text/chatcompletion_v2", {
         "model": "MiniMax-Text-01",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 1024,
         "temperature": 0.7,
-    }).encode()
-    req = urllib.request.Request(url, data=payload, headers={
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {MINIMAX_API_KEY}",
-    })
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
-    if "choices" in data and data["choices"]:
+    }, {"Authorization": f"Bearer {MINIMAX_API_KEY}"})
+    if data.get("choices"):
         return data["choices"][0]["message"]["content"]
-    if "reply" in data:
+    if data.get("reply"):
         return data["reply"]
+    # Empty choices usually means an API-level rejection (auth, balance, moderation);
+    # base_resp carries the real reason.
+    base = data.get("base_resp") or {}
+    if base.get("status_msg"):
+        raise RuntimeError(f"MiniMax {base.get('status_code')}: {base.get('status_msg')}")
     raise ValueError(f"Unexpected MiniMax response: {list(data.keys())}")
 
 
