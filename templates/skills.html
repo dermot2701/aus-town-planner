@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Skills Profile{% endblock %}
+{% block breadcrumb %}Skills Profile{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1 class="page-title">{{ content.title }}</h1>
+  <p class="page-sub">{{ content.description }}</p>
+</header>
+
+<div class="kpi-strip" role="region" aria-label="Skill areas">
+  {% for s in content.skills %}
+  <div class="kpi-card">
+    <div class="kpi-label">{{ s.number }}</div>
+    <div class="kpi-primary" style="font-size:14px;line-height:1.3">{{ s.title }}</div>
+    <div class="kpi-delta">{{ s.competencies | length }} competencies</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div style="margin-top:24px">
+  {% for s in content.skills %}
+  <div class="app-card app-card-padded mt-4" id="{{ s.id }}">
+    <div class="app-card-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="app-badge info" style="font-size:11px;min-width:22px;justify-content:center">{{ s.number }}</span>
+        <div class="app-section-title">{{ s.title }}</div>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6">{{ s.summary }}</p>
+    <div class="app-accordion">
+      {% for c in s.competencies %}
+      <div class="accordion-item">
+        <button class="accordion-header" aria-expanded="false">
+          <span>{{ c.title }}</span>
+          <svg class="accordion-chevron" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="accordion-body">
+          <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin:0">{{ c.detail }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
