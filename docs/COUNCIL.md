@@ -36,7 +36,7 @@ that's a client transport issue, not a stalled server (see the SSE notes in
 |-----|-------|------|---------|----------|
 | `gemini` | Gemini 2.5 Flash | Member + **Chair** (Stage 3) | `GEMINI_API_KEY` | `generativelanguage.googleapis.com` |
 | `groq` | Llama 3.3 70B (Groq) | Member | `GROQ_API_KEY` | `api.groq.com/openai/v1` |
-| `minimax` | MiniMax M2.7 | Member | `MINIMAX_API_KEY` | `api.minimax.io/v1/text/chatcompletion_v2` (model `MiniMax-M2.7`) |
+| `minimax` | MiniMax M2.1 | Member | `MINIMAX_API_KEY` | `api.minimax.io/anthropic/v1/messages` (Anthropic Messages; model `MiniMax-M2.1`) |
 
 - A member is **active** only if its key is present. The council needs a
   **quorum of ≥2**; with fewer, the page shows a warning and disables the button.
@@ -73,38 +73,75 @@ These all actually happened; keep the fixes in place.
 ### Groq → `HTTP 403 Forbidden: error code: 1010`
 
 **`error code: 1010` is a Cloudflare block, not a Groq auth failure.** Groq's API
-sits behind Cloudflare, whose WAF returns 1010 ("banned browser signature") for
-requests that look like bots — including the default `Python-urllib/x.y`
-User-Agent and requests with no `Accept-Language`.
+sits behind Cloudflare, whose WAF returns `1010` ("banned browser signature") for
+requests that *look* like bots — most commonly a request whose `User-Agent` is the
+language default (`Python-urllib/x.y`, `python-requests/x.y`, `Go-http-client`,
+etc.) and/or that omits ordinary browser headers like `Accept-Language`. The
+request is killed at Cloudflare's edge **before Groq's API ever sees it**.
 
-**Fix (in `_http_post_json`):** send a normal browser `User-Agent`, `Accept`, and
-`Accept-Language` on every council POST. Callers can still override any header;
-`Content-Type: application/json` is always forced last.
+**How to be sure it's an edge block (the diagnostic tell):** check the Groq
+dashboard. If **Usage shows 0 API calls** and **Logs show nothing** while your app
+gets a 403, the request never reached Groq — so it cannot be the key (a bad key
+reaches Groq and is *logged* as a 401). That combination = Cloudflare edge block.
 
-If 1010 ever returns *despite* the browser headers, it's no longer UA-based — the
-likely causes are an IP/ASN-level block on the Cloud Run egress region, or a
-Cloudflare rule change. Levers then: redeploy in a different region, route the
-Groq call through an egress proxy, or contact Groq. (A valid/invalid **key**
-produces 401, not 1010, so a 1010 is never the key.)
+**Fix:** send a realistic browser `User-Agent` (plus `Accept` and
+`Accept-Language`) on the request. In this app that lives in `_http_post_json`, so
+every council POST gets it; callers can still override, and
+`Content-Type: application/json` is forced last.
+
+```python
+headers = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/125.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Accept-Language": "en-AU,en;q=0.9",
+    "Authorization": f"Bearer {GROQ_API_KEY}",
+    "Content-Type": "application/json",
+}
+```
+
+After the fix, calls start appearing on the Groq Usage/Logs dashboard — that's the
+confirmation it cleared Cloudflare.
+
+If `1010` persists *despite* browser headers, it's no longer UA-based: suspect an
+IP/ASN-level block on your server's egress (some cloud regions' ranges are
+flagged), or a Cloudflare rule change. Levers then: deploy from a different
+region, route the call through an egress proxy with a clean IP, or contact Groq.
+A `1010` is **never** the key (that's a `401`).
+
+> **Portable note (applies to any HTTP LLM client, e.g. another council app):**
+> a `403 … 1010` from *any* Cloudflare-fronted API (Groq and others) almost always
+> means "set a browser-like `User-Agent`." SDKs usually set one; raw
+> `urllib`/`requests`/`fetch` from a server often don't. This is the first thing
+> to try whenever a provider 403s with a Cloudflare error code and the dashboard
+> shows zero received calls.
 
 ### MiniMax → `status_code=1008 status_msg='insufficient balance'`
 
 This appeared on the **wrong host** (`api.minimaxi.chat`) **even with ample
-subscription quota unused**, and **persisted after switching to a plan-covered
-model (`MiniMax-M2.7`)** — which ruled out the model. The real cause was the
-**API host**: the account, subscription, and quota live on **`api.minimax.io`**,
-whereas `api.minimaxi.chat` is a separate platform whose wallet was empty, so it
-`1008`'d no matter the model. (OpenClaw works against the same key precisely
-because it points at `https://api.minimax.io`.)
+subscription quota unused**, and **persisted after switching models** — which
+ruled out the model. The real cause was the **API host**: the account,
+subscription, and quota live on **`api.minimax.io`**, whereas `api.minimaxi.chat`
+is a separate platform whose wallet was empty, so it `1008`'d no matter the model.
 
-**Fix:** call MiniMax's own API on the correct host —
-`POST https://api.minimax.io/v1/text/chatcompletion_v2`, model **`MiniMax-M2.7`**,
-`Authorization: Bearer $MINIMAX_API_KEY` (OpenAI-compatible schema). No gateway,
-no extra key.
+**Fix:** call MiniMax on the exact host/format that already works for this account
+(this is how OpenClaw is configured), via the **Anthropic-compatible** endpoint:
 
-`base_resp.status_code` cheat-sheet: `1004` auth failed · `1008` insufficient
-balance · `1002` rate limit · `1027` output content risk (moderation). A `1008`
-that survives a host/model check points at the wrong account/host, not the model.
+- `POST https://api.minimax.io/anthropic/v1/messages`
+- `Authorization: Bearer $MINIMAX_API_KEY`, `anthropic-version: 2023-06-01`
+- body is Anthropic Messages: `{"model": "MiniMax-M2.1", "max_tokens": …, "messages": […]}`
+- response `content` is a list of blocks — concatenate the `type:"text"` ones
+  (a reasoning model like `MiniMax-M2.5` also emits `thinking` blocks, which we skip)
+
+> **Model names:** the portal serves the **M2.1 / M2.5** family — there is **no
+> `MiniMax-M2.7`** here (that slug only exists on OpenRouter). `MiniMax-M2.1` is
+> the fast, non-reasoning default; `MiniMax-M2.5` is the reasoning model.
+
+`base_resp.status_code` cheat-sheet (native OpenAI-format endpoint): `1004` auth
+failed · `1008` insufficient balance · `1002` rate limit · `1027` output content
+risk (moderation). A `1008` that survives a host/model check points at the wrong
+account/host, not the model.
 
 ### "Connection lost — please try again" (client)
 
@@ -114,6 +151,46 @@ non-destructive `onerror` that ignores the normal stream close after
 `council_complete` and keeps partial results instead of wiping the page. If you
 see this again, confirm the server reached `council.done` in the logs before
 suspecting the client.
+
+## Page layout & client (SSE)
+
+`templates/council.html` is the whole client. Layout and streaming details that
+matter:
+
+**Layout.** The page is a vertical stack, **not** a 2-column grid: a full-width
+**question bar across the top** (textarea + a `Convene Council` button, with the
+active members shown as chips), and the **full-width 3-stage output below**. This
+was a deliberate change — the old 2-column layout gave answers only half the page
+width, truncating long opinions. Output boxes are generous (`.stage-body`
+`max-height:70vh`, `.council-final` `max-height:80vh`) so answers rarely need
+inner scrolling.
+
+**Token ceilings.** So answers aren't cut off server-side: Gemini
+`maxOutputTokens` 2048, Groq/MiniMax `max_tokens` 1536. Bump these if you see
+genuinely truncated output (as opposed to a too-small box).
+
+**SSE event types** (server `yield sse({...})` → client `handle(ev)`):
+
+| `type` | When | Client action |
+|--------|------|----------------|
+| `stage_start` | each stage begins | show the loading spinner for that stage |
+| `stage1_response` | a member's first opinion | add/refresh its Stage 1 tab |
+| `stage_complete` (stage 1/2/3) | a stage finishes | mark the stage number ✓, open the next shell |
+| `stage2_review` | a member's peer review | add/refresh its Stage 2 tab |
+| `stage3_final` | the Chair's synthesis | fill the final box |
+| `council_complete` | run finished cleanly | set `completed=true`, close the stream |
+| `error` | context prep failed | replace the panel with the error |
+
+**Errored member never steals the default tab.** A failing member (its text starts
+`[Error`) returns almost instantly, so it would otherwise arrive first and become
+the selected Stage 1/2 tab — hiding the real answers behind it. `defaultKey()`
+selects the first **non-error** response as the active tab.
+
+**"Connection lost" is a client concern, not the server.** `onerror` ignores the
+normal stream close that follows `council_complete`, and keeps partial results
+rather than wiping the page. The single `handle()` function matters: an earlier
+bug declared it twice, causing infinite recursion on the first message. Always
+confirm the server reached `council.done` in the logs before suspecting the wire.
 
 ## Operational checklist
 

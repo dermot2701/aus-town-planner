@@ -159,7 +159,7 @@ MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY")
 _COUNCIL_MODELS = {
     "gemini":  {"label": "Gemini 2.5 Flash",     "chairman": True},
     "groq":    {"label": "Llama 3.3 70B (Groq)", "chairman": False},
-    "minimax": {"label": "MiniMax M2.7",          "chairman": False},
+    "minimax": {"label": "MiniMax M2.1",          "chairman": False},
 }
 
 _COUNCIL_MEMBER_SYSTEM = (
@@ -240,28 +240,32 @@ def _council_query_groq(prompt: str) -> str:
 
 
 def _council_query_minimax(prompt: str) -> str:
-    # MiniMax M2.7 via MiniMax's own API on **api.minimax.io** — the host the
-    # account's subscription/quota lives on (and the one OpenClaw uses). The
-    # earlier api.minimaxi.chat host billed a separate, empty wallet and 1008'd
-    # regardless of model. OpenAI-compatible chatcompletion_v2 schema.
-    data = _http_post_json("https://api.minimax.io/v1/text/chatcompletion_v2", {
-        "model": "MiniMax-M2.7",
-        "messages": [{"role": "user", "content": prompt}],
+    # MiniMax via its **Anthropic-compatible** endpoint on api.minimax.io — the
+    # exact host/format OpenClaw uses (api.minimaxi.chat was a separate, empty
+    # wallet that 1008'd). The portal serves the M2.1/M2.5 family (no "M2.7");
+    # M2.1 is OpenClaw's default — fast and non-reasoning, so the answer is a
+    # clean text block. Auth is a bearer token, schema is Anthropic Messages.
+    data = _http_post_json("https://api.minimax.io/anthropic/v1/messages", {
+        "model": "MiniMax-M2.1",
         "max_tokens": 1536,
-        "temperature": 0.7,
-    }, {"Authorization": f"Bearer {MINIMAX_API_KEY}"})
-    if data.get("choices"):
-        return data["choices"][0]["message"]["content"]
-    # Empty choices = API-level rejection; base_resp.status_code is the real signal
-    # (1004=auth, 1008=insufficient balance, 1002=rate limit, 1027=content risk).
+        "messages": [{"role": "user", "content": prompt}],
+    }, {"Authorization": f"Bearer {MINIMAX_API_KEY}",
+        "anthropic-version": "2023-06-01"})
+    # Anthropic Messages: content is a list of blocks; concatenate the text ones
+    # (a reasoning model would also emit separate "thinking" blocks we skip).
+    blocks = data.get("content") or []
+    text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+    if text.strip():
+        return text
+    # Surface the error shape MiniMax/Anthropic returns when there's no content.
+    err = data.get("error") or {}
+    if err:
+        raise RuntimeError(f"MiniMax {err.get('type')}: {err.get('message')}")
     base = data.get("base_resp") or {}
-    flags = {k: data[k] for k in ("input_sensitive", "output_sensitive",
-                                  "input_sensitive_type", "output_sensitive_type")
-             if data.get(k)}
-    raise RuntimeError(
-        f"MiniMax returned no choices — status_code={base.get('status_code')} "
-        f"status_msg={base.get('status_msg') or '(blank)'!r}"
-        + (f" moderation={flags}" if flags else ""))
+    if base.get("status_code"):
+        raise RuntimeError(f"MiniMax status_code={base.get('status_code')} "
+                           f"status_msg={base.get('status_msg')!r}")
+    raise ValueError(f"Unexpected MiniMax response: {list(data.keys())}")
 
 
 def _council_query(model_key: str, prompt: str) -> str:

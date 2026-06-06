@@ -70,7 +70,7 @@ uploaded manually with `gcloud storage cp`.
 | Review engine | Gemini (heuristic fallback) | `_GEMINI_SYSTEM` — JSON-only, grounded on retrieved context |
 | Ask Holly | Gemini | `_HOLLY_SYSTEM` — conversational planning advice |
 | Case Review | Gemini | `_CASELAW_SYSTEM` — structured JSON case analysis |
-| Planning Council | Gemini + Groq (Llama 3.3 70B) + MiniMax | `_COUNCIL_MEMBER_SYSTEM` / `_COUNCIL_CHAIRMAN_PREAMBLE` |
+| Planning Council | Gemini (Chair) + Groq (Llama 3.3 70B) + MiniMax M2.1 | `_COUNCIL_MEMBER_SYSTEM` / `_COUNCIL_CHAIRMAN_PREAMBLE` — see [COUNCIL.md](COUNCIL.md) |
 
 `_gemini_model(system=None)` is the **single Gemini factory** — it calls the REST
 API directly (no SDK). Pass a system instruction for non-review surfaces. All
@@ -83,9 +83,33 @@ Gemini JSON responses are parsed via `re.search(r'\{.*\}', text, re.DOTALL)`.
 | `SECRET_KEY` | Flask session secret | dev default — set in prod |
 | `GEMINI_API_KEY` | Gemini reviews, embeddings, Holly, Case Review, Council Chair (Holly) | unset → heuristic |
 | `GROQ_API_KEY` | Council member (Llama 3.3 70B) | unset |
-| `MINIMAX_API_KEY` | Council member (MiniMax M2.7, via `api.minimax.io`) | unset |
+| `MINIMAX_API_KEY` | Council member (MiniMax M2.1, via `api.minimax.io/anthropic`) | unset |
 | `GCS_BUCKET` | Use Cloud Storage instead of `data/` | unset → local |
 
+## Cross-cutting helpers & gotchas
+
+- **`_http_post_json(url, payload, headers)`** is the single outbound-POST helper
+  for the non-Gemini council providers. It sends a **browser `User-Agent`**
+  (Groq's Cloudflare WAF 403s the default `Python-urllib` agent with error `1010`)
+  and, on an HTTP error, **reads and surfaces the response body** so failures are
+  legible. See [COUNCIL.md](COUNCIL.md).
+- **Structured logging.** `_log(event, **fields)` emits one JSON line per event to
+  stdout (Cloud Run captures it). Searchable events include `ask.retrieve` /
+  `ask.answer` / `ask.error` (Ask Holly) and `council.retrieve` /
+  `council.member_error` / `council.stage_done` / `council.synthesis_error` /
+  `council.done` (Planning Council). When a council member fails, the real cause
+  is in `council.member_error.detail`.
+- **App-shell layout.** `.app-shell` is a CSS grid whose first column is the
+  (fixed) sidebar width and second column is content. Content elements
+  (`.app-main`, `.news-ticker`) must **not** also carry `margin-left:
+  var(--sidebar-w)` — the grid already offsets them, and a second offset leaves an
+  empty band between the sidebar and content. The topbar (no margin) is the
+  reference for correct alignment.
+- **Inherited CSS gotchas** (from the shared scaffold): never add `transform` to
+  `.fade-in` (it traps `position:fixed` modals in Chrome); animate
+  `.modal-overlay.active .modal-box`, not `.modal-box`; `app.css` loads after
+  Bootstrap on purpose — don't reorder; no `data-bs-toggle`.
+
 See [`SETUP.md`](SETUP.md) for deployment, [`REVIEW_ENGINE.md`](REVIEW_ENGINE.md)
-for how assessments are produced, and [`INGESTION.md`](INGESTION.md) for building
-the corpus.
+for how assessments are produced, [`COUNCIL.md`](COUNCIL.md) for the multi-LLM
+council, and [`INGESTION.md`](INGESTION.md) for building the corpus.
