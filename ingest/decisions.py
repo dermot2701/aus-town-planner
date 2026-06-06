@@ -239,6 +239,51 @@ def _llm_fields(model, citation, text):
     }
 
 
+# ── Local-file ingestion (browser-downloaded HTML) ────────────────────────────
+
+def ingest_local(local_dir: str, db: str, model) -> list:
+    """Process HTML files saved from a browser. Filenames should include the
+    case number (e.g. TASCAT_47.html or just 47.html).
+
+    Usage:
+        1. Open https://www8.austlii.edu.au/cgi-bin/viewdb/au/cases/tas/TASCAT/
+           in a browser, click each decision, File → Save Page As (HTML only).
+        2. Put all saved .html files in one directory.
+        3. Run: python -m ingest.decisions --local-dir ./my_cases --db tascat
+    """
+    import glob
+    import os as _os
+    out = []
+    paths = sorted(glob.glob(_os.path.join(local_dir, "*.html")) +
+                   glob.glob(_os.path.join(local_dir, "*.htm")))
+    if not paths:
+        print(f"[decisions] No .html files found in {local_dir}")
+        return out
+    print(f"[decisions] local-dir: {len(paths)} files in {local_dir}")
+    for path in paths:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            raw = f.read()
+        text = _strip_html(raw)
+        # Derive a citation from filename
+        num_m = re.search(r"(\d+)", _os.path.basename(path))
+        num = num_m.group(1) if num_m else _os.path.splitext(_os.path.basename(path))[0]
+        year_m = re.search(r"(20\d{2})", _os.path.basename(path))
+        year = year_m.group(1) if year_m else str(datetime.date.today().year)
+        citation = f"[{year}] {DB_CITATION.get(db, db.upper())} {num}"
+        if not _is_planning(text):
+            print(f"[decisions] skip (non-planning) {citation}")
+            continue
+        try:
+            rec = _llm_fields(model, citation, text) if model else _heuristic_fields(citation, text)
+            if rec is None:
+                continue
+            print(f"[decisions] kept {citation} — {rec.get('outcome','?')}")
+            out.append(rec)
+        except Exception as e:
+            print(f"[decisions] failed {citation}: {e}")
+    return out
+
+
 # ── Driver ──────────────────────────────────────────────────────────────────
 
 def main():
@@ -249,7 +294,21 @@ def main():
     ap.add_argument("--year-to", type=int, default=now_year)
     ap.add_argument("--limit", type=int, default=200, help="max cases to fetch (across all)")
     ap.add_argument("--no-gemini", action="store_true", help="skip the LLM pass even if a key is set")
+    ap.add_argument("--local-dir", help="process locally saved HTML files instead of fetching from AustLII")
     args = ap.parse_args()
+
+    model = None if args.no_gemini else _gemini()
+
+    # Local-file mode — bypasses AustLII network access entirely
+    if args.local_dir:
+        db = "tascat" if args.db == "both" else args.db
+        decisions = ingest_local(args.local_dir, db, model)
+        if not decisions:
+            print("[decisions] Nothing kept from local files.")
+            return
+        write_data("decisions.json", {"decisions": decisions})
+        print(f"[decisions] done: {len(decisions)} planning decisions kept from local files.")
+        return
 
     dbs = ["tascat", "rmpat"] if args.db == "both" else [args.db]
     found = []
@@ -260,7 +319,6 @@ def main():
               "and the year range. SAMPLE corpus left in place.")
         return
 
-    model = None if args.no_gemini else _gemini()
     decisions, skipped = [], 0
     for d in found[: args.limit]:
         try:
@@ -269,7 +327,7 @@ def main():
                 skipped += 1
                 continue
             rec = _llm_fields(model, d["citation"], text) if model else _heuristic_fields(d["citation"], text)
-            if rec is None:           # Gemini judged it non-planning
+            if rec is None:
                 skipped += 1
                 continue
             print(f"[decisions] kept {d['citation']} — {rec.get('outcome','?')}")

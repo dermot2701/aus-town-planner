@@ -17,6 +17,7 @@ import os
 import time
 import json
 import urllib.request
+import http.cookiejar
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -30,11 +31,32 @@ _HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-AU,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
 }
+
+_cookie_jar = http.cookiejar.CookieJar()
+_opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(_cookie_jar))
+_warmed = False
+
+
+def _warm(base_url="https://www8.austlii.edu.au/"):
+    """Visit AustLII homepage once to acquire session cookies."""
+    global _warmed
+    if _warmed:
+        return
+    try:
+        req = urllib.request.Request(base_url, headers=_HEADERS)
+        with _opener.open(req, timeout=30):
+            pass
+        _warmed = True
+    except Exception:
+        _warmed = True  # don't retry if homepage also blocked
 
 
 def fetch(url, binary=False):
-    """Throttled, cached GET. Returns bytes (binary) or str."""
+    """Throttled, cached GET with cookie session. Returns bytes (binary) or str."""
+    _warm()
     os.makedirs(CACHE_DIR, exist_ok=True)
     key = "".join(c if c.isalnum() else "_" for c in url)[-180:]
     path = os.path.join(CACHE_DIR, key + (".bin" if binary else ".txt"))
@@ -42,10 +64,18 @@ def fetch(url, binary=False):
         mode = "rb" if binary else "r"
         with open(path, mode) as f:
             return f.read()
-    req = urllib.request.Request(url, headers=_HEADERS)
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    headers = dict(_HEADERS)
+    headers["Referer"] = "https://www8.austlii.edu.au/"
+    req = urllib.request.Request(url, headers=headers)
+    with _opener.open(req, timeout=60) as resp:
         data = resp.read()
-    if not binary:
+    # Decompress gzip if needed
+    if not binary and isinstance(data, bytes):
+        import gzip
+        try:
+            data = gzip.decompress(data)
+        except (OSError, gzip.BadGzipFile):
+            pass
         data = data.decode("utf-8", errors="replace")
     mode = "wb" if binary else "w"
     with open(path, mode) as f:
