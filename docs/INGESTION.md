@@ -88,16 +88,29 @@ keyword fallback) — it does not replace it.
 
 ## Scheme — `ingest/scheme.py`
 
-Resolves SPP + per-municipality LPS PDFs from TPSO, extracts text with
-`pdftotext`, and chunks by clause heading (e.g. `10.4.1 A1`).
-
-> **Status:** the TPSO host/selectors in `discover_documents()` are a starting
-> point and need verification against the live site — until then the committed
-> `scheme_chunks.json` is **SAMPLE** data and the SAMPLE banner persists.
+Ingests the **State Planning Provisions (SPP)** — the statewide rulebook (zone
+purposes, use tables, codes, and acceptable-solution / performance-criterion
+standards) — from the published PDF. Downloads it, extracts text (prefers
+`pdftotext`, falls back to `pdfminer.six`), and chunks by clause heading
+(`8.2 Use Table`, `10.4.1`, `C10.6.1`, …), deduplicating against the PDF's
+table of contents.
 
 ```bash
-python -m ingest.scheme
+python -m ingest.scheme                      # current effective SPP
+python -m ingest.scheme --pdf-url <url>      # a newer consolidated SPP
+python -m ingest.scheme --pdf-file spp.pdf   # a locally downloaded PDF
 ```
+
+Yields ~500 clauses (≈400 standards, 23 use tables, 27 codes), all
+`provenance: "LIVE"`, `scope: "statewide"`.
+
+> **LPS not yet ingested.** The per-municipality **Local Provisions Schedules**
+> live in the dynamic TPSO viewer (`tpso.planning.tas.gov.au/tpso/external/
+> planning-scheme-viewer/{id}/section/{n}`), a JavaScript SPA backed by an
+> undocumented JSON API. Wiring that up needs the API endpoint (capture it from
+> the browser DevTools → Network tab). The SPP carries the substantive
+> provisions a review grounds on; the LPS layer mainly maps zones to parcels,
+> which the planner supplies as the proposal's zone.
 
 ## Corpus status & the SAMPLE banner
 

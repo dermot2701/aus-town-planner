@@ -2,6 +2,6 @@
   "app_name": "TasPlan Review",
   "tagline": "Tasmanian planning assessment — analytical aid",
   "contact_email": "",
-  "corpus_status": "SAMPLE",
-  "corpus_banner": "Corpus is illustrative SAMPLE data — pending live ingestion of the Tasmanian Planning Scheme and TASCAT decisions. Not authoritative."
+  "corpus_status": "LIVE",
+  "corpus_banner": "State Planning Provisions and TASCAT decisions are ingested from source. Local Provisions Schedules (per-municipality) are not yet loaded. Analytical aid only — confirm against the current scheme."
 }

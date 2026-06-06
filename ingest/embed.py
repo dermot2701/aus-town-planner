@@ -143,16 +143,26 @@ def main():
     ap.add_argument("--all", action="store_true",
                     help="embed every case in decisions.json instead of just the seed list")
     ap.add_argument("--limit", type=int, default=100, help="max cases to embed")
+    ap.add_argument("--fresh", action="store_true",
+                    help="ignore any existing index and re-embed every case from scratch")
     args = ap.parse_args()
 
     _preflight()
 
     records = (_records_from_decisions(args.limit) if args.all
                else _seed_records(SEED_CITATIONS)[: args.limit])
-    print(f"[embed] {len(records)} cases to index")
 
-    chunks, n_cases = [], 0
-    for rec in records:
+    # Resume: keep chunks already embedded so a killed run picks up where it left off.
+    existing = [] if args.fresh else (read_data("decision_chunks.json") or {}).get("chunks", [])
+    done = {c["citation"] for c in existing}
+    chunks = list(existing)
+    if done:
+        print(f"[embed] resuming — {len(done)} cases already indexed ({len(existing)} chunks). "
+              f"Use --fresh to rebuild from scratch.")
+    todo = [r for r in records if r["citation"] not in done]
+    print(f"[embed] {len(records)} cases in scope, {len(todo)} to embed")
+
+    for rec in todo:
         cit = rec["citation"]
         try:
             text = _strip_html(fetch(rec["url"]))
@@ -165,13 +175,13 @@ def main():
         muni = rec.get("_municipality") or meta["municipality"]
 
         pieces = chunk_text(text)
-        kept = 0
+        case_chunks = []
         for i, piece in enumerate(pieces):
             vec = _embed(piece)
             if not vec:
-                print(f"[embed] embedding failed {cit} chunk {i} (no key or API error)")
+                print(f"[embed] embedding failed {cit} chunk {i} (API error after retries)")
                 continue
-            chunks.append({
+            case_chunks.append({
                 "chunk_id": f"{cit} #{i}",
                 "citation": cit,
                 "title": title,
@@ -179,17 +189,18 @@ def main():
                 "text": piece,
                 "embedding": vec,
             })
-            kept += 1
-        print(f"[embed] {cit}: {kept}/{len(pieces)} chunks embedded")
-        if kept:
-            n_cases += 1
+        chunks.extend(case_chunks)
+        print(f"[embed] {cit}: {len(case_chunks)}/{len(pieces)} chunks embedded")
+        # Checkpoint after every case so an interrupted run loses nothing.
+        if case_chunks:
+            write_data("decision_chunks.json", {"chunks": chunks})
 
     if not chunks:
         print("[embed] No chunks embedded. Set GEMINI_API_KEY and confirm network access. "
               "Existing index left in place.")
         return
 
-    write_data("decision_chunks.json", {"chunks": chunks})
+    n_cases = len({c["citation"] for c in chunks})
     print(f"[embed] done: {len(chunks)} chunks from {n_cases} cases → decision_chunks.json")
 
 
