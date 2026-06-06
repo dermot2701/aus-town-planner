@@ -36,7 +36,7 @@ that's a client transport issue, not a stalled server (see the SSE notes in
 |-----|-------|------|---------|----------|
 | `gemini` | Gemini 2.5 Flash | Member + **Chair** (Stage 3) | `GEMINI_API_KEY` | `generativelanguage.googleapis.com` |
 | `groq` | Llama 3.3 70B (Groq) | Member | `GROQ_API_KEY` | `api.groq.com/openai/v1` |
-| `minimax` | MiniMax M2.7 | Member | `MINIMAX_API_KEY` | `api.minimaxi.chat/v1/text/chatcompletion_v2` |
+| `minimax` | MiniMax M2.7 | Member | `OPENROUTER_API_KEY` | `openrouter.ai/api/v1/chat/completions` (model `minimax/minimax-m2.7`) |
 
 - A member is **active** only if its key is present. The council needs a
   **quorum of ≥2**; with fewer, the page shows a warning and disables the button.
@@ -89,25 +89,25 @@ produces 401, not 1010, so a 1010 is never the key.)
 
 ### MiniMax → `status_code=1008 status_msg='insufficient balance'`
 
-This appeared **even with ample subscription quota unused**. The cause was the
-**model name**, not the balance:
+This appeared on MiniMax's **native** API (`api.minimaxi.chat`) **even with ample
+subscription quota unused**, and — crucially — **persisted after switching to a
+plan-covered model (`MiniMax-M2.7`)**. That ruled out the model: MiniMax's native
+developer API bills **only** against the pay-as-you-go **credit balance** (0); the
+Plus **subscription plan quota does not fund the developer API at all**.
 
-- MiniMax separates a **subscription plan quota** (covers the current model
-  family — M3 / M2.7 / image / speech / music) from a pay-as-you-go **credit
-  balance**. Credits are only consumed *after* the plan quota is exhausted.
-- We were calling the legacy **`MiniMax-Text-01`**, which is **not** in the plan's
-  model family — so billing skipped the plan quota, fell to the credit balance
-  (0), and rejected with `1008`.
+**Fix:** route the MiniMax member through **OpenRouter** instead of MiniMax's
+native API — `POST https://openrouter.ai/api/v1/chat/completions`, model
+**`minimax/minimax-m2.7`**, `Authorization: Bearer $OPENROUTER_API_KEY`. OpenRouter
+bills separately (its own credits), which is the path coding-agent clients like
+OpenClaw already use successfully. The member is therefore gated on
+`OPENROUTER_API_KEY`, not `MINIMAX_API_KEY`.
 
-**Fix:** call a plan-covered model. The app uses **`MiniMax-M2.7`** (the same
-model coding-agent clients like OpenClaw use successfully on the same account).
+> Model-string gotcha: OpenRouter slugs are lowercase and provider-prefixed
+> (`minimax/minimax-m2.7`). MiniMax's **native** API instead wants the bare
+> `MiniMax-M2.7`. Don't mix them up — each rejects the other's form.
 
-> Model-string gotcha: gateways (OpenRouter / LiteLLM, and tools like OpenClaw)
-> use a provider-prefixed name `minimax/MiniMax-M2.7`. MiniMax's **native** API
-> (which this app calls directly) wants the **bare** `MiniMax-M2.7` — the
-> `minimax/` prefix would be rejected as an unknown model.
-
-MiniMax `base_resp.status_code` cheat-sheet: `1004` auth failed · `1008`
+To use MiniMax's native API directly instead, you'd need a non-zero credit
+balance there; `base_resp.status_code` cheat-sheet: `1004` auth failed · `1008`
 insufficient balance · `1002` rate limit · `1027` output content risk
 (moderation).
 

@@ -13,7 +13,7 @@
   Council requires at least 2 models. Add API keys via Secret Manager:
   <code>GEMINI_API_KEY</code>{% if gemini %} ✓{% endif %},
   <code>GROQ_API_KEY</code>{% if groq %} ✓{% endif %},
-  <code>MINIMAX_API_KEY</code>{% if minimax %} ✓{% endif %}.
+  <code>OPENROUTER_API_KEY</code>{% if minimax %} ✓{% endif %} (MiniMax M2.7).
 </div>
 {% endif %}
 
@@ -154,9 +154,15 @@ function handle(ev) {
   }
 }
 
+// An errored member (its text starts with "[Error") should not be the default
+// tab — a fast-failing member would otherwise hide the real answers behind it.
+function defaultKey(store, keys) {
+  return keys.find(k => !String(store[k].text).startsWith('[Error')) || keys[0];
+}
+
 function renderStage1() {
   const keys = Object.keys(s1);
-  const first = keys[0];
+  const first = defaultKey(s1, keys);
   let tabs = keys.map(k => `<button class="stage-tab${k===first?' active':''}" onclick="switchTab(this,'s1-${k}')">${escHtml(s1[k].label)}</button>`).join('');
   let panels = keys.map(k => `<div id="s1-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${escHtml(s1[k].text)}</div>`).join('');
   document.getElementById('stage1').innerHTML = `
@@ -174,7 +180,7 @@ function appendStage2Shell() {
 
 function renderStage2() {
   const keys = Object.keys(s2);
-  const first = keys[0];
+  const first = defaultKey(s2, keys);
   let tabs = keys.map(k => `<button class="stage-tab${k===first?' active':''}" onclick="switchTab(this,'s2-${k}')">${escHtml(s2[k].label)}</button>`).join('');
   let panels = keys.map(k => `<div id="s2-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${escHtml(s2[k].text)}</div>`).join('');
   document.getElementById('stage2').innerHTML = `

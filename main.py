@@ -155,6 +155,10 @@ def inject_globals():
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY")
+# The MiniMax council member is routed through OpenRouter: MiniMax's native API
+# bills only against a pay-as-you-go credit balance (which the Plus plan doesn't
+# fund), whereas OpenRouter bills separately and is the path that already works.
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 _COUNCIL_MODELS = {
     "gemini":  {"label": "Gemini 2.5 Flash",     "chairman": True},
@@ -185,7 +189,7 @@ def _council_active_members():
         active["gemini"] = _COUNCIL_MODELS["gemini"]
     if GROQ_API_KEY:
         active["groq"] = _COUNCIL_MODELS["groq"]
-    if MINIMAX_API_KEY:
+    if OPENROUTER_API_KEY:
         active["minimax"] = _COUNCIL_MODELS["minimax"]
     return active
 
@@ -240,31 +244,23 @@ def _council_query_groq(prompt: str) -> str:
 
 
 def _council_query_minimax(prompt: str) -> str:
-    data = _http_post_json("https://api.minimaxi.chat/v1/text/chatcompletion_v2", {
-        # MiniMax-Text-01 is the legacy model and isn't covered by the Plus plan
-        # (which covers the M-series) — it bills to the pay-as-you-go credit
-        # balance and 1008s when that's empty. Use a current, plan-covered model.
-        "model": "MiniMax-M2.7",
+    # MiniMax M2.7 via OpenRouter (OpenAI-compatible). Native MiniMax billing draws
+    # on a pay-as-you-go credit balance the Plus plan doesn't fund (1008); the
+    # OpenRouter gateway bills separately and is the path that already works.
+    data = _http_post_json("https://openrouter.ai/api/v1/chat/completions", {
+        "model": "minimax/minimax-m2.7",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 1024,
         "temperature": 0.7,
-    }, {"Authorization": f"Bearer {MINIMAX_API_KEY}"})
+    }, {"Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "X-Title": "TasPlan Review"})
     if data.get("choices"):
         return data["choices"][0]["message"]["content"]
-    if data.get("reply"):
-        return data["reply"]
-    # Empty choices means an API-level rejection. base_resp.status_code is the real
-    # signal (1004=auth, 1008=insufficient balance, 1002=rate limit, 1027=content
-    # risk); the input/output_sensitive flags flag moderation. Surface all of it
-    # unconditionally — status_msg is often blank even when status_code is set.
-    base = data.get("base_resp") or {}
-    flags = {k: data[k] for k in ("input_sensitive", "output_sensitive",
-                                  "input_sensitive_type", "output_sensitive_type")
-             if data.get(k)}
-    raise RuntimeError(
-        f"MiniMax returned no choices — status_code={base.get('status_code')} "
-        f"status_msg={base.get('status_msg') or '(blank)'!r}"
-        + (f" moderation={flags}" if flags else ""))
+    # OpenRouter reports upstream/billing problems in an "error" object.
+    err = data.get("error") or {}
+    if err:
+        raise RuntimeError(f"OpenRouter {err.get('code')}: {err.get('message')}")
+    raise ValueError(f"Unexpected OpenRouter response: {list(data.keys())}")
 
 
 def _council_query(model_key: str, prompt: str) -> str:
@@ -888,7 +884,7 @@ def council():
     active = _council_active_members()
     return render_template("council.html", models=active, has_quorum=len(active) >= 2,
                            gemini=bool(GEMINI_API_KEY), groq=bool(GROQ_API_KEY),
-                           minimax=bool(MINIMAX_API_KEY))
+                           minimax=bool(OPENROUTER_API_KEY))
 
 
 @app.route("/council/stream")
