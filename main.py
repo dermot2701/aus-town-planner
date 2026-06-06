@@ -244,13 +244,19 @@ def _council_query_minimax(prompt: str) -> str:
     # exact host/format OpenClaw uses (api.minimaxi.chat was a separate, empty
     # wallet that 1008'd). The portal serves the M2.1/M2.5 family (no "M2.7");
     # M2.1 is OpenClaw's default — fast and non-reasoning, so the answer is a
-    # clean text block. Auth is a bearer token, schema is Anthropic Messages.
+    # clean text block. The endpoint follows the Anthropic convention: the key
+    # goes in the X-Api-Key header (NOT Authorization: Bearer — that 401s with
+    # "carry the API secret key in the 'X-Api-Key' field"). MM-API-Source
+    # attributes the request to the MiniMax Coding Plan (OpenClaw sends this
+    # header too); without it the call bills the empty wallet and 402s (1008).
+    # Use this app's own source identity, matching the key registered for it.
     data = _http_post_json("https://api.minimax.io/anthropic/v1/messages", {
         "model": "MiniMax-M2.1",
         "max_tokens": 1536,
         "messages": [{"role": "user", "content": prompt}],
-    }, {"Authorization": f"Bearer {MINIMAX_API_KEY}",
-        "anthropic-version": "2023-06-01"})
+    }, {"X-Api-Key": MINIMAX_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "MM-API-Source": "TasPlan"})
     # Anthropic Messages: content is a list of blocks; concatenate the text ones
     # (a reasoning model would also emit separate "thinking" blocks we skip).
     blocks = data.get("content") or []
