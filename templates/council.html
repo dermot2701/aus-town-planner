@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Planning Council{% endblock %}
+{% block breadcrumb %}Planning Council{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1 class="page-title">Planning Council</h1>
+  <p class="page-sub">Multiple AI specialists debate your planning question independently, critique each other, then a Chairman synthesises the consensus. Grounded in the ingested scheme and TASCAT decisions.</p>
+</header>
+
+{% if not has_quorum %}
+<div class="app-alert warning">
+  Council requires at least 2 models. Currently active:
+  {% if gemini %}<strong>Gemini</strong>{% endif %}{% if not groq %} — add <code>GROQ_API_KEY</code> (free at console.groq.com) to enable Llama.{% endif %}
+  {% if groq %}<strong>Llama (Groq)</strong>{% endif %}{% if not gemini %} — add <code>GEMINI_API_KEY</code> to enable Gemini.{% endif %}
+</div>
+{% endif %}
+
+<div class="grid-2" style="align-items:start;gap:20px">
+
+  <!-- ── Sidebar: input + model status ───────────────────────── -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="app-card app-card-padded">
+      <div class="app-card-header"><div class="app-section-title">Ask the Council</div></div>
+      <div class="form-group">
+        <textarea class="app-textarea" id="queryInput" rows="6"
+          placeholder="e.g. Can a short-stay accommodation use be approved in the General Residential zone in Kingborough? What permit pathway applies and what conditions would be appropriate?"></textarea>
+        <div class="form-hint">The council retrieves relevant clauses and decisions automatically.</div>
+      </div>
+      <button id="submitBtn" class="app-btn primary lg w-full" style="justify-content:center"
+        onclick="submitQuery()" {% if not has_quorum %}disabled{% endif %}>
+        Convene Council
+      </button>
+    </div>
+
+    <div class="app-card app-card-padded">
+      <div class="app-card-header"><div class="app-section-title">Council Members</div></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        {% for key, m in models.items() %}
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-subtle)">
+          <div>
+            <div style="font-size:13px;color:var(--text-primary);font-weight:500">{{ m.label }}</div>
+            <div style="font-size:11px;color:var(--text-faint)">{{ 'Chairman · Stage 3 synthesis' if m.chairman else 'Member · Stage 1 & 2' }}</div>
+          </div>
+          <span class="app-badge success">active</span>
+        </div>
+        {% endfor %}
+      </div>
+      <div style="font-size:11px;color:var(--text-faint);margin-top:8px">
+        Opinions are independent (no cross-contamination at Stage 1). Stage 2 reviews are anonymised.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Main: 3-stage output ────────────────────────────────── -->
+  <div class="app-card app-card-padded" id="councilMain" style="min-height:480px;display:flex;align-items:center;justify-content:center">
+    <p class="text-faint" style="text-align:center;max-width:300px">
+      Submit a planning question to convene the council. The three-stage process takes 20–40 seconds.
+    </p>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+  .council-stage { display:none; flex-direction:column; gap:12px; width:100% }
+  .council-stage.active { display:flex }
+  .stage-hdr { display:flex; align-items:center; gap:10px; padding-bottom:10px; border-bottom:1px solid var(--border-subtle); margin-bottom:4px }
+  .stage-num { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#000; font-weight:700; font-size:11px; flex-shrink:0 }
+  .stage-num.done { background:var(--success,#00c9a7) }
+  .stage-tabs { display:flex; gap:4px; border-bottom:1px solid var(--border-subtle); margin-bottom:8px; overflow-x:auto }
+  .stage-tab { padding:5px 12px; background:transparent; border:none; color:var(--text-faint); cursor:pointer; font-size:12px; font-weight:500; border-bottom:2px solid transparent; transition:all .15s }
+  .stage-tab:hover { color:var(--text-primary) }
+  .stage-tab.active { color:var(--accent); border-bottom-color:var(--accent) }
+  .stage-body { background:var(--bg); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:12px; font-size:13px; color:var(--text-secondary); line-height:1.7; white-space:pre-wrap; max-height:380px; overflow-y:auto; word-break:break-word }
+  .stage-loading { font-size:13px; color:var(--text-faint); font-style:italic; text-align:center; padding:24px 0 }
+  .council-final { background:var(--bg); border:1px solid var(--accent); border-radius:var(--radius-md); padding:14px; font-size:13px; color:var(--text-secondary); line-height:1.7; white-space:pre-wrap; max-height:480px; overflow-y:auto }
+</style>
+
+<script>
+let es = null;
+let s1 = {}, s2 = {};
+const main = () => document.getElementById('councilMain');
+
+function sse(payload) { return `data: ${JSON.stringify(payload)}\n\n`; }
+
+function submitQuery() {
+  const q = document.getElementById('queryInput').value.trim();
+  if (!q) return;
+  document.getElementById('submitBtn').disabled = true;
+  s1 = {}; s2 = {};
+  if (es) es.close();
+
+  main().style.cssText = 'padding:0';
+  main().innerHTML = `
+    <div class="council-stage active" id="stage1">
+      <div class="stage-hdr"><div class="stage-num" id="sn1">1</div><div class="app-section-title">Stage 1 — First Opinions</div></div>
+      <div class="stage-loading"><span class="live-dot"></span> Gathering first opinions...</div>
+    </div>`;
+
+  es = new EventSource('/council/stream?q=' + encodeURIComponent(q));
+  es.onmessage = e => {
+    try { handle(JSON.parse(e.data)); } catch(err) { console.error(err); }
+  };
+  es.onerror = () => {
+    es.close();
+    document.getElementById('submitBtn').disabled = false;
+    main().innerHTML = '<div class="app-alert danger" style="margin:0">Connection lost — please try again.</div>';
+  };
+}
+
+function handle(ev) {
+  if (ev.type === 'stage1_response') {
+    s1[ev.model] = {label: ev.label, text: ev.response};
+    renderStage1();
+  } else if (ev.type === 'stage_complete' && ev.stage === 1) {
+    document.getElementById('sn1').classList.add('done');
+    document.getElementById('sn1').textContent = '✓';
+    appendStage2Shell();
+  } else if (ev.type === 'stage2_review') {
+    s2[ev.model] = {label: ev.label, text: ev.review};
+    renderStage2();
+  } else if (ev.type === 'stage_complete' && ev.stage === 2) {
+    document.getElementById('sn2').classList.add('done');
+    document.getElementById('sn2').textContent = '✓';
+    appendStage3Shell();
+  } else if (ev.type === 'stage3_final') {
+    document.getElementById('finalBody').textContent = ev.response;
+  } else if (ev.type === 'stage_complete' && ev.stage === 3) {
+    document.getElementById('sn3').classList.add('done');
+    document.getElementById('sn3').textContent = '✓';
+  } else if (ev.type === 'council_complete') {
+    es.close();
+    document.getElementById('submitBtn').disabled = false;
+  } else if (ev.type === 'error') {
+    main().innerHTML = `<div class="app-alert danger" style="margin:0">${escHtml(ev.message)}</div>`;
+    es.close();
+    document.getElementById('submitBtn').disabled = false;
+  }
+}
+
+function renderStage1() {
+  const keys = Object.keys(s1);
+  const first = keys[0];
+  let tabs = keys.map(k => `<button class="stage-tab${k===first?' active':''}" onclick="switchTab(this,'s1-${k}')">${escHtml(s1[k].label)}</button>`).join('');
+  let panels = keys.map(k => `<div id="s1-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${escHtml(s1[k].text)}</div>`).join('');
+  document.getElementById('stage1').innerHTML = `
+    <div class="stage-hdr"><div class="stage-num" id="sn1">1</div><div class="app-section-title">Stage 1 — First Opinions</div></div>
+    <div class="stage-tabs">${tabs}</div>${panels}`;
+}
+
+function appendStage2Shell() {
+  main().insertAdjacentHTML('beforeend', `
+    <div class="council-stage active" id="stage2" style="margin-top:16px">
+      <div class="stage-hdr"><div class="stage-num" id="sn2">2</div><div class="app-section-title">Stage 2 — Peer Reviews</div></div>
+      <div class="stage-loading"><span class="live-dot"></span> Processing peer reviews...</div>
+    </div>`);
+}
+
+function renderStage2() {
+  const keys = Object.keys(s2);
+  const first = keys[0];
+  let tabs = keys.map(k => `<button class="stage-tab${k===first?' active':''}" onclick="switchTab(this,'s2-${k}')">${escHtml(s2[k].label)}</button>`).join('');
+  let panels = keys.map(k => `<div id="s2-${k}" class="stage-body" style="display:${k===first?'block':'none'}">${escHtml(s2[k].text)}</div>`).join('');
+  document.getElementById('stage2').innerHTML = `
+    <div class="stage-hdr"><div class="stage-num" id="sn2">2</div><div class="app-section-title">Stage 2 — Peer Reviews</div></div>
+    <div class="stage-tabs">${tabs}</div>${panels}`;
+}
+
+function appendStage3Shell() {
+  main().insertAdjacentHTML('beforeend', `
+    <div class="council-stage active" id="stage3" style="margin-top:16px">
+      <div class="stage-hdr"><div class="stage-num" id="sn3">3</div><div class="app-section-title">Stage 3 — Chairman's Synthesis</div></div>
+      <div class="stage-loading"><span class="live-dot"></span> Chairman synthesising...</div>
+      <div class="council-final" id="finalBody" style="display:none"></div>
+    </div>`);
+}
+
+// Override to show final body once text appears
+const origHandle = handle;
+function handle(ev) {
+  origHandle(ev);
+  if (ev.type === 'stage3_final') {
+    const fb = document.getElementById('finalBody');
+    if (fb) fb.style.display = 'block';
+    const loading = document.querySelector('#stage3 .stage-loading');
+    if (loading) loading.remove();
+  }
+}
+
+function switchTab(btn, panelId) {
+  const stage = panelId.startsWith('s1-') ? 's1-' : 's2-';
+  document.querySelectorAll(`[id^="${stage}"]`).forEach(el => el.style.display = 'none');
+  btn.closest('.council-stage').querySelectorAll('.stage-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(panelId).style.display = 'block';
+  btn.classList.add('active');
+}
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+}
+</script>
+{% endblock %}

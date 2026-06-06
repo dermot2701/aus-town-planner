@@ -55,6 +55,11 @@
 
     <div class="sidebar-section">
       <div class="sidebar-label">Ask</div>
+      <a href="{{ url_for('council') }}" class="nav-item" data-page="/council"
+         {% if request.path.startswith('/council') %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="9" cy="7" r="3"/><circle cx="15" cy="7" r="3"/><path d="M3 21v-2a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v2"/></svg>
+        Planning Council
+      </a>
       <a href="{{ url_for('ask_holly') }}" class="nav-item" data-page="/ask"
          {% if request.path.startswith('/ask') %}aria-current="page"{% endif %}>
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
