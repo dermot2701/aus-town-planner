@@ -46,6 +46,7 @@ uploaded manually with `gcloud storage cp`.
 | `decisions.json` | `{decisions: [{citation, title, municipality, use_classes[], keywords[], summary, outcome, principle, provenance}]}` | `ingest/decisions.py` |
 | `decision_chunks.json` | `{chunks: [{chunk_id, citation, title, municipality, text, embedding[768]}]}` | `ingest/embed.py` |
 | `skills.json` | `{title, description, skills: [{id, number, title, summary, competencies[]}]}` | committed reference data |
+| `history.json` | `{runs: [{id, ts, user, kind, title, output, supplied[], meta}]}` (newest first, capped 1000) | `_record_run()` on each AI run |
 
 ## Routes
 
@@ -59,6 +60,7 @@ uploaded manually with `gcloud storage cp`.
 | `GET/POST /caselaw` | login | Case Review — structured Gemini analysis of a pasted decision |
 | `GET/POST /ask` | login | Ask Holly — free-form planning Q&A |
 | `GET /council`, `GET /council/stream` | login | Planning Council — 3-stage multi-LLM debate (SSE) |
+| `GET /history`, `/history/<id>`, `/history/<id>/pdf` | login | Saved AI runs (Holly/Council/Review/Case Review) — list+filter, detail, PDF |
 | `GET /skills` | login | Planner competency framework |
 | `GET /admin` | admin | Corpus status, source manifest, user management |
 | `POST /admin/users/{add,edit,delete}` | admin | User CRUD |
