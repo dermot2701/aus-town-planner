@@ -190,6 +190,40 @@ def _dtshort(iso):
 app.jinja_env.filters["dtshort"] = _dtshort
 
 
+# ── Run history (GCS-backed) ──────────────────────────────────────────────────
+_HISTORY_FILE = "history.json"
+_HISTORY_CAP = 1000
+
+
+def _record_run(kind, title, output, supplied=None, meta=None):
+    """Append an AI run to the GCS-backed history. Best-effort: never break the
+    user flow if the write fails. Newest first, capped at _HISTORY_CAP."""
+    import uuid
+    try:
+        data = load_json(_HISTORY_FILE)
+        if not isinstance(data, dict):
+            data = {}
+        runs = data.get("runs", [])
+        runs.insert(0, {
+            "id": uuid.uuid4().hex[:12],
+            "ts": datetime.now(tz=TAS).isoformat(),
+            "user": session.get("user") or "—",
+            "kind": kind,
+            "title": (title or "").strip()[:200] or "(untitled)",
+            "output": output or "",
+            "supplied": supplied or [],
+            "meta": meta or {},
+        })
+        data["runs"] = runs[:_HISTORY_CAP]
+        save_json(_HISTORY_FILE, data)
+    except Exception as e:
+        _log("history.error", error=str(e)[:200], kind=kind)
+
+
+_HISTORY_KINDS = {"ask": "Ask Holly", "council": "Planning Council",
+                  "review": "Proposal Review", "caselaw": "Case Review"}
+
+
 # ── Gemini factory ────────────────────────────────────────────────────────────
 # Single source of truth for the model. gemini-2.5-flash only. Responses are
 # prose; always extract JSON via re.search(r'\{.*\}', text, re.DOTALL).
@@ -895,6 +929,10 @@ def api_review():
     if not proposal.get("description") and not proposal.get("use_class"):
         return jsonify({"error": "Provide at least use_class or description."}), 400
     result, _ctx, engine = review_proposal(proposal)
+    _title = (proposal.get("description") or
+              " ".join(str(proposal.get(k, "")) for k in ("municipality", "zone", "use_class")).strip())
+    _record_run("review", _title, json.dumps(result, indent=2),
+                meta={"engine": engine, "proposal": proposal})
     return jsonify({"engine": engine, "result": result})
 
 
@@ -1123,6 +1161,8 @@ def ask_holly():
                         follow_ups = _holly_followups(question, answer)
                     _log("ask.answer", chars=len(answer), supplied=len(supplied),
                          follow_ups=len(follow_ups), latency_s=round(time.time() - t0, 2))
+                    _record_run("ask", question, answer, supplied=supplied,
+                                meta={"municipality": muni, "zone": _detect_zone(question)})
                 except Exception as e:
                     error = f"Gemini error: {e}"
                     _log("ask.error", error=str(e)[:300], latency_s=round(time.time() - t0, 2))
@@ -1267,6 +1307,9 @@ def council_stream():
         yield sse({"type": "stage_complete", "stage": 3})
         yield sse({"type": "council_complete"})
         _log("council.done", final_chars=len(final))   # server reached the end
+        _record_run("council", question, final,
+                    meta={"members": list(active.keys()),
+                          "municipality": muni, "zone": _detect_zone(question)})
 
     return Response(
         stream_with_context(generate()),
@@ -1301,12 +1344,60 @@ def caselaw():
                     review = json.loads(match.group() if match else resp.text)
                     if citation and not review.get("citation"):
                         review["citation"] = citation
+                    _record_run("caselaw",
+                                review.get("case_name") or review.get("citation") or citation,
+                                json.dumps(review, indent=2),
+                                meta={"citation": review.get("citation") or citation})
                 except Exception as e:
                     error = f"Analysis failed: {e}"
             else:
                 error = "No Gemini API key configured — case analysis requires Gemini."
     return render_template("caselaw.html", review=review, citation=citation,
                            case_text=case_text, error=error, gemini=bool(GEMINI_API_KEY))
+
+
+@app.route("/history")
+@login_required
+def history():
+    runs = (load_json(_HISTORY_FILE) or {}).get("runs", [])
+    q = request.args.get("q", "").strip()
+    kind = request.args.get("kind", "").strip()
+    try:
+        limit = max(1, min(int(request.args.get("limit", 10)), 500))
+    except (TypeError, ValueError):
+        limit = 10
+    filtered = runs
+    if kind:
+        filtered = [r for r in filtered if r.get("kind") == kind]
+    if q:
+        ql = q.lower()
+        filtered = [r for r in filtered
+                    if ql in (r.get("title", "") + " " + r.get("output", "") + " " + r.get("user", "")).lower()]
+    total = len(filtered)
+    return render_template("history.html", runs=filtered[:limit], total=total, limit=limit,
+                           q=q, kind=kind, kinds=_HISTORY_KINDS, has_more=total > limit)
+
+
+@app.route("/history/<rid>")
+@login_required
+def history_detail(rid):
+    from flask import abort
+    run = next((r for r in (load_json(_HISTORY_FILE) or {}).get("runs", []) if r.get("id") == rid), None)
+    if not run:
+        abort(404)
+    return render_template("history_detail.html", run=run, kinds=_HISTORY_KINDS)
+
+
+@app.route("/history/<rid>/pdf")
+@login_required
+def history_pdf(rid):
+    from flask import abort, Response
+    run = next((r for r in (load_json(_HISTORY_FILE) or {}).get("runs", []) if r.get("id") == rid), None)
+    if not run:
+        abort(404)
+    pdf = _report_pdf(run.get("title", ""), run.get("output", ""), run.get("supplied"))
+    return Response(pdf, mimetype="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="tasplan-{run.get("kind", "run")}-{rid}.pdf"'})
 
 
 @app.route("/admin")

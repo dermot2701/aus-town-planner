@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block breadcrumb %}History{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1 class="page-title">History</h1>
+  <p class="page-sub">Saved AI runs — Ask Holly, Planning Council, Proposal Review and Case Review. Most recent first.</p>
+</header>
+
+<form method="GET" action="{{ url_for('history') }}" class="app-card app-card-padded" style="margin-bottom:20px">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+    <div class="form-group" style="flex:1;min-width:220px;margin:0">
+      <label class="form-label">Search</label>
+      <input class="app-input" name="q" value="{{ q }}" placeholder="question, output text, or user…">
+    </div>
+    <div class="form-group" style="margin:0">
+      <label class="form-label">Type</label>
+      <select class="app-input" name="kind">
+        <option value="">All types</option>
+        {% for k, label in kinds.items() %}
+        <option value="{{ k }}" {% if kind == k %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <input type="hidden" name="limit" value="{{ limit }}">
+    <button type="submit" class="app-btn primary">Filter</button>
+    {% if q or kind %}<a href="{{ url_for('history') }}" class="app-btn">Clear</a>{% endif %}
+  </div>
+</form>
+
+<div class="app-card app-card-padded">
+  {% if runs %}
+  <table class="app-table">
+    <thead><tr><th>When</th><th>Type</th><th>Title</th><th>User</th><th></th></tr></thead>
+    <tbody>
+      {% for r in runs %}
+      <tr>
+        <td style="font-size:12px;color:var(--text-faint);white-space:nowrap">{{ r.ts | dtshort }}</td>
+        <td><span class="app-badge {{ 'info' if r.kind in ('ask','council') else '' }}">{{ kinds.get(r.kind, r.kind) }}</span></td>
+        <td><a href="{{ url_for('history_detail', rid=r.id) }}" style="color:var(--text-primary)">{{ r.title[:120] }}{% if r.title|length > 120 %}…{% endif %}</a></td>
+        <td style="font-size:12px;color:var(--text-faint)">{{ r.user }}</td>
+        <td style="text-align:right;white-space:nowrap"><a class="app-btn sm" href="{{ url_for('history_detail', rid=r.id) }}">Open</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:12px;color:var(--text-faint)">
+    <span>Showing {{ runs|length }} of {{ total }}{% if q or kind %} matching{% endif %}.</span>
+    {% if has_more %}
+    <a class="app-btn sm" href="{{ url_for('history', q=q, kind=kind, limit=limit + 20) }}">Show more</a>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="text-faint" style="text-align:center;padding:30px 0;max-width:420px;margin:0 auto">
+    {% if q or kind %}No runs match your filter.{% else %}No saved runs yet — use Ask Holly, the Council, Review or Case Review and they'll appear here.{% endif %}
+  </p>
+  {% endif %}
+</div>
+{% endblock %}
