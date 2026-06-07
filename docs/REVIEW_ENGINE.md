@@ -111,6 +111,22 @@ and the answer is rendered through the **`mdlite`** Jinja filter (`_md_lite` in
 `main.py`), which escapes HTML first then applies the same safe markdown subset
 (bold, headings, bullets, dividers) as the council's client-side renderer.
 
+**Clarify → refine loop.** When an answer trips `_is_insufficient()` (it flagged
+missing info), `_holly_followups()` makes a second Gemini call to extract up to 6
+specific follow-up questions (concrete proposal facts, or an invitation to paste a
+clause the corpus lacks). These render as inline fields under the answer. On
+submit, `_collect_supplied()` merges the answered ones (carried as a JSON
+`supplied` field) and the next prompt includes an **ADDITIONAL CONTEXT SUPPLIED BY
+THE PLANNER** block. Holly treats those facts as established and may quote
+planner-pasted clause text **attributed as `(planner-supplied)`**, kept distinct
+from the ingested corpus (it still never invents). The loop repeats — each refine
+accumulates context and may surface new questions.
+
+**PDF export.** `POST /ask/pdf` renders the question, any planner-supplied context,
+and the assessment to a downloadable PDF via `_report_pdf()` (fpdf2, pure-Python;
+`_pdf_safe` maps non-Latin-1 glyphs, `_pdf_render_markdown` handles
+headings/bold/bullets/dividers). The caveat is stamped in the footer.
+
 The same `retrieve()` + grounding rules power the **Planning Council** — see
 [COUNCIL.md](COUNCIL.md).
 

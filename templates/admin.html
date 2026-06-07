@@ -58,7 +58,7 @@ python -m ingest.decisions   # TASCAT → decisions.json</pre>
     <button class="app-btn primary" data-modal-open="modal-add-user">+ Add user</button>
   </div>
   <table class="app-table">
-    <thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
+    <thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Last login</th><th></th></tr></thead>
     <tbody>
       {% for username, u in users.items() %}
       <tr>
@@ -66,6 +66,7 @@ python -m ingest.decisions   # TASCAT → decisions.json</pre>
         <td>{{ u.name }}</td>
         <td style="font-size:12px;color:var(--text-faint)">{{ u.email }}</td>
         <td><span class="app-badge {{ 'info' if u.role == 'admin' else '' }}">{{ u.role }}</span></td>
+        <td style="font-size:12px;color:var(--text-faint);white-space:nowrap">{{ u.last_login | dtshort }}</td>
         <td style="text-align:right;white-space:nowrap">
           <button class="app-btn sm"
             data-modal-open="modal-edit-user"
