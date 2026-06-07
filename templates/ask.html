@@ -36,6 +36,7 @@
       <div class="app-section-title">Holly</div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="app-badge info">Grounded · cited</span>
+        <button type="button" class="app-btn sm" onclick="copyText('.holly-answer', this)">Copy</button>
         <form method="POST" action="{{ url_for('ask_pdf') }}" style="margin:0" target="_blank">
           <textarea name="question" style="display:none">{{ question }}</textarea>
           <textarea name="answer" style="display:none">{{ answer }}</textarea>
@@ -115,11 +116,33 @@
             '<div class="app-card app-card-padded" style="min-height:220px;display:flex;' +
             'flex-direction:column;align-items:center;justify-content:center;gap:14px">' +
             '<span class="spin spin-lg"></span>' +
-            '<p class="text-faint" style="text-align:center;max-width:300px">' +
-            'Holly is reading the scheme clauses and TASCAT decisions…</p></div>';
+            '<p class="text-faint" style="text-align:center;max-width:320px">' +
+            'Holly is reading the scheme clauses and TASCAT decisions… ' +
+            'This is saved to History, so you can navigate away.</p></div>';
         }
       });
     });
   })();
+
+  // Copy the rendered answer text (clean, no markdown markers) to the clipboard.
+  function copyText(selector, btn) {
+    var el = document.querySelector(selector);
+    if (!el) return;
+    var text = el.innerText;
+    var done = function (ok) {
+      var label = btn.textContent;
+      btn.textContent = ok ? 'Copied!' : 'Copy failed';
+      setTimeout(function () { btn.textContent = label; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta); done(true);
+      } catch (e) { done(false); }
+    }
+  }
 </script>
 {% endblock %}

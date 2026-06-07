@@ -1157,12 +1157,14 @@ def ask_holly():
                 try:
                     resp = model.generate_content(prompt)
                     answer = resp.text.strip()
+                    # Persist immediately — before the (slower) follow-up step — so the
+                    # answer survives in History even if the user navigates away.
+                    _record_run("ask", question, answer, supplied=supplied,
+                                meta={"municipality": muni, "zone": _detect_zone(question)})
                     if _is_insufficient(answer):
                         follow_ups = _holly_followups(question, answer)
                     _log("ask.answer", chars=len(answer), supplied=len(supplied),
                          follow_ups=len(follow_ups), latency_s=round(time.time() - t0, 2))
-                    _record_run("ask", question, answer, supplied=supplied,
-                                meta={"municipality": muni, "zone": _detect_zone(question)})
                 except Exception as e:
                     error = f"Gemini error: {e}"
                     _log("ask.error", error=str(e)[:300], latency_s=round(time.time() - t0, 2))
