@@ -190,6 +190,15 @@ def _dtshort(iso):
 app.jinja_env.filters["dtshort"] = _dtshort
 
 
+def _strip_md(text):
+    """Strip markdown markers for plain-text display (e.g. history titles)."""
+    t = re.sub(r"[*_`#>]+", "", str(text or ""))
+    return re.sub(r"\s+", " ", t).strip()
+
+
+app.jinja_env.filters["stripmd"] = _strip_md
+
+
 # ── Run history (GCS-backed) ──────────────────────────────────────────────────
 _HISTORY_FILE = "history.json"
 _HISTORY_CAP = 1000

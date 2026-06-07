@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}History — {{ run.title[:40] }}{% endblock %}
+{% block title %}History — {{ run.title | stripmd | truncate(40, True, '') }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('history') }}" style="color:inherit">History</a> · {{ kinds.get(run.kind, run.kind) }}{% endblock %}
 
 {% block content %}
 <header class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
   <div>
-    <h1 class="page-title" style="max-width:760px">{{ run.title }}</h1>
+    <h1 class="page-title" style="max-width:760px">{{ run.title | stripmd }}</h1>
     <p class="page-sub">
       <span class="app-badge {{ 'info' if run.kind in ('ask','council') else '' }}">{{ kinds.get(run.kind, run.kind) }}</span>
       · {{ run.ts | dtshort }} · {{ run.user }}
