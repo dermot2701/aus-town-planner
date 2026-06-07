@@ -109,6 +109,75 @@ def load_bytes(filename):
         return f.read()
 
 
+# ── Image uploads (Ask Holly) ──────────────────────────────────────────────────
+# Planners can attach site plans / drawings / map screenshots. Stored as blobs
+# (not in any JSON), keyed by a random hex name so they can be served back and
+# carried across the refine loop.
+_UPLOAD_PREFIX = "uploads/"
+_UPLOAD_MAX_BYTES = 8 * 1024 * 1024       # 8 MB per image
+_UPLOAD_MAX_FILES = 4
+_UPLOAD_MIMES = {"image/jpeg": "jpg", "image/png": "png",
+                 "image/webp": "webp", "image/gif": "gif"}
+_UPLOAD_NAME_RE = re.compile(r"^[0-9a-f]{32}\.(?:jpg|png|webp|gif)$")
+
+
+def _store_uploaded_images():
+    """Read image files from the current request, validate, store each blob.
+    Returns a list of {key, mime, name} refs. Best-effort — skips bad files."""
+    import uuid
+    refs = []
+    for f in request.files.getlist("images"):
+        if not f or not f.filename:
+            continue
+        mime = (f.mimetype or "").lower()
+        ext = _UPLOAD_MIMES.get(mime)
+        if not ext:
+            continue
+        data = f.read(_UPLOAD_MAX_BYTES + 1)
+        if not data or len(data) > _UPLOAD_MAX_BYTES:
+            continue
+        key = f"{_UPLOAD_PREFIX}{uuid.uuid4().hex}.{ext}"
+        try:
+            save_bytes(key, data, mime)
+            refs.append({"key": key, "mime": mime, "name": f.filename[:120]})
+        except Exception as e:
+            _log("ask.upload_error", error=str(e)[:200])
+        if len(refs) >= _UPLOAD_MAX_FILES:
+            break
+    return refs
+
+
+def _collect_images():
+    """Merge image refs carried from a prior turn (hidden images_json) with any
+    newly uploaded files. Returns a list of {key, mime, name}."""
+    refs = []
+    try:
+        prior = json.loads(request.form.get("images_json") or "[]")
+        if isinstance(prior, list):
+            for p in prior:
+                if isinstance(p, dict) and _UPLOAD_NAME_RE.match(
+                        str(p.get("key", "")).split("/")[-1]):
+                    refs.append({"key": str(p["key"]), "mime": str(p.get("mime", "")),
+                                 "name": str(p.get("name", ""))})
+    except (ValueError, TypeError):
+        pass
+    refs.extend(_store_uploaded_images())
+    return refs[:_UPLOAD_MAX_FILES]
+
+
+def _images_as_gemini_parts(image_refs):
+    """Load stored images and return Gemini inlineData parts (base64-encoded)."""
+    import base64
+    parts = []
+    for ref in image_refs or []:
+        data = load_bytes(ref.get("key", ""))
+        if not data:
+            continue
+        parts.append({"inlineData": {"mimeType": ref.get("mime") or "image/png",
+                                     "data": base64.b64encode(data).decode()}})
+    return parts
+
+
 # ── Auth ────────────────────────────────────────────────────────────────────
 
 def login_required(f):
@@ -1183,9 +1252,11 @@ def ask_holly():
     error = None
     follow_ups = []
     supplied = []
+    image_refs = []
     if request.method == "POST":
         question = request.form.get("question", "").strip()
         supplied = _collect_supplied()
+        image_refs = _collect_images()
         if question:
             t0 = time.time()
             muni = _detect_municipality(question)
@@ -1204,23 +1275,33 @@ def ask_holly():
                         "(facts are established; any clause text here is planner-supplied — "
                         "attribute it as '(planner-supplied)', distinct from the corpus):\n"
                         + "\n".join(f"- Q: {p['q']}\n  A: {p['a']}" for p in supplied))
+                img_parts = _images_as_gemini_parts(image_refs)
+                image_block = ""
+                if img_parts:
+                    image_block = (
+                        f"\n\nThe planner has attached {len(img_parts)} image(s) below "
+                        "(site plan/drawing/map). Read them per your instructions: report "
+                        "observable facts under 'Image observations', flag estimates, and treat "
+                        "any dimensions as image-derived planner input — never as corpus citations.")
                 prompt = (
                     f"Today's date is {datetime.now(tz=TAS).strftime('%d %B %Y')}.\n\n"
                     f"{_skills_context()}\n\n"
                     f"CONTEXT (scheme clauses and decisions — cite only these):\n{_format_context(ctx)}"
-                    f"{supplied_block}\n\n"
+                    f"{supplied_block}{image_block}\n\n"
                     f"QUESTION: {question}"
                 )
                 try:
-                    resp = model.generate_content(prompt)
+                    resp = model.generate_content(prompt, images=img_parts)
                     answer = resp.text.strip()
                     # Persist immediately — before the (slower) follow-up step — so the
                     # answer survives in History even if the user navigates away.
                     _record_run("ask", question, answer, prompt=question, supplied=supplied,
-                                meta={"municipality": muni, "zone": _detect_zone(question)})
+                                meta={"municipality": muni, "zone": _detect_zone(question),
+                                      "images": image_refs})
                     if _is_insufficient(answer):
                         follow_ups = _holly_followups(question, answer)
                     _log("ask.answer", chars=len(answer), supplied=len(supplied),
+                         images=len(image_refs),
                          follow_ups=len(follow_ups), latency_s=round(time.time() - t0, 2))
                 except Exception as e:
                     error = f"Gemini error: {e}"
@@ -1229,7 +1310,8 @@ def ask_holly():
                 error = "No Gemini API key configured — Holly requires Gemini to answer questions."
     return render_template("ask.html", question=question, answer=answer, error=error,
                            follow_ups=follow_ups, supplied=supplied,
-                           supplied_json=json.dumps(supplied), gemini=bool(GEMINI_API_KEY))
+                           supplied_json=json.dumps(supplied), images=image_refs,
+                           images_json=json.dumps(image_refs), gemini=bool(GEMINI_API_KEY))
 
 
 @app.route("/ask/pdf", methods=["POST"])
@@ -1249,6 +1331,21 @@ def ask_pdf():
     pdf = _report_pdf(question, answer, supplied)
     return Response(pdf, mimetype="application/pdf", headers={
         "Content-Disposition": 'attachment; filename="holly-assessment.pdf"'})
+
+
+@app.route("/uploads/<name>")
+@login_required
+def serve_upload(name):
+    """Serve a stored image upload. Strict name match prevents path traversal or
+    serving anything but the random-keyed images we created."""
+    if not _UPLOAD_NAME_RE.match(name):
+        abort(404)
+    raw = load_bytes(_UPLOAD_PREFIX + name)
+    if raw is None:
+        abort(404)
+    ext = name.rsplit(".", 1)[-1]
+    mime = "image/jpeg" if ext == "jpg" else f"image/{ext}"
+    return Response(raw, mimetype=mime, headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.route("/council")

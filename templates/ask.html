@@ -9,7 +9,7 @@
 </header>
 
 <!-- ── Question: full width across the top ───────────────────────── -->
-<form id="askForm" method="POST" action="{{ url_for('ask_holly') }}" class="app-card app-card-padded" style="margin-bottom:20px">
+<form id="askForm" method="POST" action="{{ url_for('ask_holly') }}" enctype="multipart/form-data" class="app-card app-card-padded" style="margin-bottom:20px">
   <div class="app-card-header"><div class="app-section-title">Your question</div></div>
   {% if not gemini %}
   <div class="app-alert warning" style="margin-bottom:12px">No Gemini API key — Holly is offline.</div>
@@ -18,6 +18,24 @@
     <textarea class="app-textarea" name="question" rows="14" style="min-height:320px;resize:vertical"
       placeholder="e.g. What are the acceptable solutions for building height in the General Residential zone in Hobart? Or: Has TASCAT considered short-stay accommodation in residential zones? (Paste long, detailed briefs here — drag the bottom-right corner to resize.)">{{ question }}</textarea>
   </div>
+
+  <!-- ── Optional image attachments: site plans, drawings, map screenshots ── -->
+  <div class="form-group" style="margin-bottom:8px">
+    <label class="form-label">Attach plans or drawings
+      <span style="color:var(--text-faint);font-weight:400">(optional — up to 4 images)</span></label>
+    <div id="dropZone" class="ask-dropzone">
+      <input id="imgInput" type="file" name="images" multiple
+             accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+      <div class="ask-dropzone-hint">
+        <strong>Drag &amp; drop</strong> a site plan, architect drawing or Google Maps screenshot,
+        or <span style="text-decoration:underline">click to browse</span>.<br>
+        Holly reports observable dimensions/scale as <em>image-derived</em> facts and flags any estimate.
+        PNG/JPG/WebP/GIF, max 8&nbsp;MB each.
+      </div>
+      <div id="imgPreviews" class="ask-previews"></div>
+    </div>
+  </div>
+
   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <div class="form-hint" style="margin:0">Holly retrieves relevant clauses and decisions automatically — no need to cite them yourself.</div>
     <button id="askBtn" type="submit" class="app-btn primary lg" style="white-space:nowrap" {% if not gemini %}disabled{% endif %}>Ask Holly</button>
@@ -48,6 +66,19 @@
     <div class="holly-answer">{{ answer | mdlite }}</div>
   </div>
 
+  {% if images %}
+  <div class="app-card app-card-padded" style="margin-top:16px">
+    <div class="app-card-header"><div class="app-section-title">Images Holly read ({{ images|length }})</div></div>
+    <div class="ask-previews">
+      {% for img in images %}
+      <a href="{{ url_for('serve_upload', name=img.key.split('/')|last) }}" target="_blank" title="{{ img.name }}">
+        <img class="ask-thumb" src="{{ url_for('serve_upload', name=img.key.split('/')|last) }}" alt="{{ img.name }}">
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   {% if supplied %}
   <div class="app-card app-card-padded" style="margin-top:16px">
     <div class="app-card-header"><div class="app-section-title">Context you provided</div></div>
@@ -60,7 +91,7 @@
   {% endif %}
 
   {% if follow_ups %}
-  <form id="refineForm" method="POST" action="{{ url_for('ask_holly') }}" class="app-card app-card-padded" style="margin-top:16px">
+  <form id="refineForm" method="POST" action="{{ url_for('ask_holly') }}" enctype="multipart/form-data" class="app-card app-card-padded" style="margin-top:16px">
     <div class="app-card-header"><div class="app-section-title">Help Holly refine this</div></div>
     <p class="form-hint" style="margin-top:0;margin-bottom:14px">
       Holly flagged gaps. Answer any of these to sharpen the assessment — give a fact, or
@@ -68,6 +99,7 @@
     </p>
     <textarea name="question" style="display:none">{{ question }}</textarea>
     <input type="hidden" name="supplied" value="{{ supplied_json }}">
+    <input type="hidden" name="images_json" value="{{ images_json }}">
     {% for q in follow_ups %}
     <div class="form-group">
       <label class="form-label">{{ q }}</label>
@@ -75,6 +107,17 @@
       <textarea class="app-textarea" name="fu_answer" rows="2" placeholder="Your answer, or paste the clause text…"></textarea>
     </div>
     {% endfor %}
+    <div class="form-group" style="margin-bottom:8px">
+      <label class="form-label">Attach more images
+        <span style="color:var(--text-faint);font-weight:400">(optional — previously attached images are kept)</span></label>
+      <div id="refineDropZone" class="ask-dropzone">
+        <input id="refineImgInput" type="file" name="images" multiple
+               accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+        <div class="ask-dropzone-hint"><strong>Drag &amp; drop</strong> or
+          <span style="text-decoration:underline">click to browse</span>.</div>
+        <div id="refineImgPreviews" class="ask-previews"></div>
+      </div>
+    </div>
     <button id="refineBtn" type="submit" class="app-btn primary lg" style="white-space:nowrap">Refine with Holly</button>
   </form>
   {% endif %}
@@ -91,6 +134,14 @@
 <style>
   .holly-answer { font-size:14px; color:var(--text-secondary); line-height:1.8; white-space:pre-wrap; word-break:break-word }
   .holly-answer hr.md-rule { border:none; border-top:1px solid var(--border-subtle); margin:10px 0 }
+  .ask-dropzone { border:1px dashed var(--border-subtle); border-radius:8px; padding:16px;
+                  text-align:center; cursor:pointer; transition:border-color .15s, background .15s }
+  .ask-dropzone.dragover { border-color:var(--accent,#2dd4bf); background:rgba(45,212,191,.06) }
+  .ask-dropzone-hint { font-size:12px; color:var(--text-faint); line-height:1.6 }
+  .ask-previews { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px }
+  .ask-previews:empty { margin-top:0 }
+  .ask-thumb { width:96px; height:96px; object-fit:cover; border-radius:6px;
+               border:1px solid var(--border-subtle); display:block }
   .spin{display:inline-block;width:16px;height:16px;border:2px solid currentColor;
         border-right-color:transparent;border-radius:50%;animation:hollyspin .7s linear infinite;
         vertical-align:middle;margin-right:8px}
@@ -122,6 +173,54 @@
         }
       });
     });
+
+    // Drag-and-drop image attachments. Wires a drop zone to a hidden file input
+    // and shows client-side thumbnail previews. Works for the ask + refine forms.
+    function wireDropzone(zoneId, inputId, previewId) {
+      var zone = document.getElementById(zoneId);
+      var input = document.getElementById(inputId);
+      var previews = document.getElementById(previewId);
+      if (!zone || !input || !previews) return;
+      var MAX = 4;
+
+      function render() {
+        previews.innerHTML = '';
+        Array.prototype.slice.call(input.files, 0, MAX).forEach(function (file) {
+          if (!/^image\//.test(file.type)) return;
+          var img = document.createElement('img');
+          img.className = 'ask-thumb';
+          img.title = file.name;
+          var reader = new FileReader();
+          reader.onload = function (e) { img.src = e.target.result; };
+          reader.readAsDataURL(file);
+          previews.appendChild(img);
+        });
+      }
+      zone.addEventListener('click', function (e) {
+        if (e.target.tagName !== 'INPUT') input.click();
+      });
+      input.addEventListener('change', render);
+      ['dragenter', 'dragover'].forEach(function (ev) {
+        zone.addEventListener(ev, function (e) {
+          e.preventDefault(); e.stopPropagation(); zone.classList.add('dragover');
+        });
+      });
+      ['dragleave', 'drop'].forEach(function (ev) {
+        zone.addEventListener(ev, function (e) {
+          e.preventDefault(); e.stopPropagation(); zone.classList.remove('dragover');
+        });
+      });
+      zone.addEventListener('drop', function (e) {
+        var dt = new DataTransfer();
+        Array.prototype.slice.call(e.dataTransfer.files, 0, MAX).forEach(function (f) {
+          if (/^image\//.test(f.type)) dt.items.add(f);
+        });
+        input.files = dt.files;
+        render();
+      });
+    }
+    wireDropzone('dropZone', 'imgInput', 'imgPreviews');
+    wireDropzone('refineDropZone', 'refineImgInput', 'refineImgPreviews');
   })();
 
   // Copy the rendered answer text (clean, no markdown markers) to the clipboard.
