@@ -69,11 +69,15 @@ python -m ingest.decisions --local-dir ~/Downloads/tascat --db tascat
 
 ### Leading precedents — `SEED_CITATIONS`
 
-A curated list of the most-cited TASCAT R&P authorities (e.g. Owens v Kingborough,
-the Robbins Island wind-farm appeal, Mt Wellington Cableway) plus recent
-2025–26 council appeals. They're fetched by direct `viewdoc` URL — this
-**bypasses AustLII's CAPTCHA-gated search endpoint**. Edit the list in
-`ingest/decisions.py` as the leading authorities evolve.
+A curated list (**55 cases**, 2021–2026) of the most-cited TASCAT R&P authorities
+(e.g. Owens v Kingborough, the Robbins Island wind-farm series, Mt Wellington
+Cableway, Fragrance Tas-Hobart) plus recent council appeals across most
+municipalities. They're fetched by direct `viewdoc` URL — this **bypasses
+AustLII's CAPTCHA-gated search endpoint**. Every citation's case-name pairing is
+taken from AustLII's own most-cited / search index, never recalled from memory.
+Edit the list in `ingest/decisions.py` as the leading authorities evolve — only
+land-use planning matters belong here (a strata-title and a party-v-party case
+were excluded even though they appeared in the source lists).
 
 > **Never invent a citation.** A seed entry is fetched by citation → URL, so a
 > wrong number silently ingests the *wrong* decision and mislabels it. Only add

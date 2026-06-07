@@ -122,6 +122,30 @@ planner-pasted clause text **attributed as `(planner-supplied)`**, kept distinct
 from the ingested corpus (it still never invents). The loop repeats — each refine
 accumulates context and may surface new questions.
 
+**Image attachments (multimodal).** Planners can drag-drop (or browse) up to **4
+images** — site plans, architect drawings, Google Maps / aerial screenshots — in a
+drop zone under the question (PNG/JPG/WebP/GIF, ≤8 MB each; the form is
+`multipart/form-data`). On submit:
+
+1. `_store_uploaded_images()` validates each file (MIME + size) and writes it as a
+   random-keyed blob under `uploads/` via `save_bytes` (GCS in prod).
+2. `_images_as_gemini_parts()` loads the blobs and base64-encodes them as Gemini
+   `inlineData` parts; `generate_content(prompt, images=…)` sends them with the
+   grounded text prompt.
+3. `_HOLLY_SYSTEM` instructs Holly to first report what it can **observe** under an
+   *Image observations* heading (dimensions, scale bars, lot boundaries, setbacks,
+   storeys), flag anything scaled without a stated scale bar as an **ESTIMATE**, and
+   say plainly when something is illegible — **never guess a measurement**.
+   Image-derived figures are treated as planner input, attributed **`(image-derived)`**,
+   and are **not** corpus citations. The assessment still cites scheme clauses /
+   TASCAT decisions only.
+
+The refine loop carries the images forward via a hidden `images_json` field
+(`_collect_images` merges prior refs with any newly-attached files), so a sharpened
+follow-up keeps the same visual context. Thumbnails of the images Holly read are
+shown under the answer and on the History detail (served via `/uploads/<name>`).
+Upload failures are logged as `ask.upload_error` and never block the answer.
+
 **PDF export.** `POST /ask/pdf` renders the question, any planner-supplied context,
 and the assessment to a downloadable PDF via `_report_pdf()` (fpdf2, pure-Python;
 `_pdf_safe` maps non-Latin-1 glyphs, `_pdf_render_markdown` handles
@@ -129,6 +153,30 @@ headings/bold/bullets/dividers). The caveat is stamped in the footer.
 
 The same `retrieve()` + grounding rules power the **Planning Council** — see
 [COUNCIL.md](COUNCIL.md).
+
+## Run history
+
+Every AI run across the four surfaces is persisted so planners can find and re-open
+past work. `_record_run(kind, title, output, prompt, supplied, meta)` appends a
+record to `history.json` (newest first, capped 1000) — best-effort, wrapped in
+try/except so a write failure never breaks the user flow:
+
+| Field | Contents |
+|-------|----------|
+| `kind` | `ask` \| `council` \| `review` \| `caselaw` |
+| `title` | short excerpt for the list view (≤200 chars) |
+| `prompt` | the **full** input that produced the run (Holly/Council question, the proposal fields, or the pasted decision text), capped at 20k chars |
+| `output` | the answer/synthesis (prose) or the assessment JSON |
+| `supplied` | planner-supplied context (Ask Holly refine answers) |
+| `meta` | per-kind extras — e.g. `municipality`, `zone`, council `members`, and `images` (attached-image refs) |
+
+`/history` lists runs with search + kind filter + "show more"; `/history/<id>`
+shows the full prompt, output (rendered via `mdlite` for ask/council, JSON for
+review/caselaw), planner-supplied context, and attached-image thumbnails;
+`/history/<id>/pdf` exports the run. Records written before the `prompt` field
+existed fall back to the title. Each surface calls `_record_run` itself — Ask Holly
+records **before** the (slower) follow-up step so the answer survives even if the
+user navigates away.
 
 ## Semantic RAG: what's stored vs. retrieved
 
