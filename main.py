@@ -572,6 +572,36 @@ def _log(event, **fields):
         pass
 
 
+# ── Curated supplement ────────────────────────────────────────────────────────
+# Authoritative scheme provisions bundled WITH THE APP so they are ALWAYS available
+# to retrieval, independent of GCS ingestion. This is the backstop for standards the
+# PDF chunker tends to lose (table-based density, parking, multiple-dwelling and
+# private-open-space provisions). Each entry uses the scheme_chunks.json schema.
+# Populate ONLY with verbatim official scheme text — never paraphrase or invent.
+# See docs/INGESTION.md ("Curated supplement").
+_SUPPLEMENT_CHUNKS = [
+    # Example shape (do not ship placeholders — replace with real, verbatim text):
+    # {"clause_id": "SPP 9.4.1", "instrument": "SPP", "scope": "statewide",
+    #  "kind": "standard", "zone_or_code": "Inner Residential Zone",
+    #  "title": "Density for multiple dwellings",
+    #  "text": "<verbatim Acceptable Solutions and Performance Criteria>",
+    #  "keywords": ["density", "multiple", "dwelling", "site", "area"],
+    #  "use_classes": [], "provenance": "LIVE"},
+]
+
+
+def _load_scheme_chunks():
+    """Ingested SPP + LPS clauses merged with the curated supplement. The
+    supplement wins on a clause_id+scope clash, since it is hand-verified."""
+    ingested = load_json("scheme_chunks.json").get("chunks", [])
+    if not _SUPPLEMENT_CHUNKS:
+        return ingested
+    sup_keys = {(c.get("clause_id"), (c.get("scope") or "").lower()) for c in _SUPPLEMENT_CHUNKS}
+    kept = [c for c in ingested
+            if (c.get("clause_id"), (c.get("scope") or "").lower()) not in sup_keys]
+    return kept + _SUPPLEMENT_CHUNKS
+
+
 def retrieve(query, municipality=None, zone=None, use_class=None, k_scheme=8, k_decisions=4):
     """Return municipality-scoped scheme clauses + keyword-matched decisions.
 
@@ -586,7 +616,7 @@ def retrieve(query, municipality=None, zone=None, use_class=None, k_scheme=8, k_
     muni = (municipality or "").strip().lower()
     zone_num = _detect_zone(qtext)
 
-    scheme = load_json("scheme_chunks.json").get("chunks", [])
+    scheme = _load_scheme_chunks()
     in_scope = []
     for c in scheme:
         scope = (c.get("scope") or "").lower()
@@ -803,7 +833,7 @@ def review_proposal(proposal):
 @app.route("/")
 @login_required
 def home():
-    scheme = load_json("scheme_chunks.json").get("chunks", [])
+    scheme = _load_scheme_chunks()
     decisions = load_json("decisions.json").get("decisions", [])
     return render_template("home.html", scheme_count=len(scheme), decision_count=len(decisions))
 
@@ -811,7 +841,7 @@ def home():
 @app.route("/scheme")
 @login_required
 def scheme():
-    chunks = load_json("scheme_chunks.json").get("chunks", [])
+    chunks = _load_scheme_chunks()
     q = request.args.get("q", "").strip()
     muni = request.args.get("municipality", "").strip()
     if muni:
@@ -819,7 +849,7 @@ def scheme():
     if q:
         qt = _tokens(q)
         chunks = [c for c in chunks if _score_chunk(qt, c) > 0]
-    municipalities = sorted({c.get("scope") for c in load_json("scheme_chunks.json").get("chunks", []) if c.get("scope") != "statewide"})
+    municipalities = sorted({c.get("scope") for c in _load_scheme_chunks() if c.get("scope") != "statewide"})
     manifest = load_json("scheme_manifest.json")
     return render_template("scheme.html", chunks=chunks, q=q, municipality=muni,
                            municipalities=municipalities, manifest=manifest)
@@ -1283,7 +1313,7 @@ def caselaw():
 @admin_required
 def admin():
     manifest = load_json("scheme_manifest.json")
-    scheme = load_json("scheme_chunks.json").get("chunks", [])
+    scheme = _load_scheme_chunks()
     decisions_data = load_json("decisions.json").get("decisions", [])
     users = load_json("users.json")
     return render_template("admin.html", manifest=manifest, scheme_count=len(scheme),

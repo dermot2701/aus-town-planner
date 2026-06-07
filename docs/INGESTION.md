@@ -175,3 +175,28 @@ gcloud storage cp data/decision_chunks.json gs://aus-town-planner-data/decision_
 
 Files must land at the **bucket root**, not under a `data/` prefix — see
 [`ARCHITECTURE.md`](ARCHITECTURE.md#data-access--the-one-rule).
+
+## Curated supplement (always-available clauses)
+
+Table-based standards — density, parking rates, multiple-dwelling and
+private-open-space provisions, use tables — are easily lost when the SPP PDF is
+extracted and chunked (they are number-heavy and `pdftotext` mangles tables).
+`chunk_spp()` now keeps longer number-heavy blocks (only short, mostly-numeric
+lines are treated as table-of-contents stubs), so a re-run captures more — but
+verify via `/scheme` afterwards.
+
+For provisions that still must be guaranteed present, `_SUPPLEMENT_CHUNKS` in
+`main.py` is a **code-bundled** list of curated clauses merged into retrieval by
+`_load_scheme_chunks()` (and shown in `/scheme`, counted in admin). Because it
+ships with the code, it is always available **independent of GCS** — no upload
+needed, unlike `scheme_chunks.json`. The supplement wins on a `clause_id`+`scope`
+clash with the ingested corpus.
+
+Rules for the supplement (it is exempt from `load_json` only because it is code,
+not data — treat its content with the same rigour as the corpus):
+
+- Paste **verbatim** official scheme text. Never paraphrase or invent — the
+  grounding rule still applies; planners rely on these as citations.
+- Use the real `clause_id` (e.g. `SPP 9.4.x`) and set `provenance: "LIVE"`.
+- Keep it small: it is a backstop for known gaps, not a second corpus. Prefer a
+  proper re-ingest where the chunker can capture the clause from source.
