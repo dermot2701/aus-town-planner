@@ -15,8 +15,8 @@
   <div class="app-alert warning" style="margin-bottom:12px">No Gemini API key — Holly is offline.</div>
   {% endif %}
   <div class="form-group">
-    <textarea class="app-textarea" name="question" rows="3"
-      placeholder="e.g. What are the acceptable solutions for building height in the General Residential zone in Hobart? Or: Has TASCAT considered short-stay accommodation in residential zones?">{{ question }}</textarea>
+    <textarea class="app-textarea" name="question" rows="14" style="min-height:320px;resize:vertical"
+      placeholder="e.g. What are the acceptable solutions for building height in the General Residential zone in Hobart? Or: Has TASCAT considered short-stay accommodation in residential zones? (Paste long, detailed briefs here — drag the bottom-right corner to resize.)">{{ question }}</textarea>
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <div class="form-hint" style="margin:0">Holly retrieves relevant clauses and decisions automatically — no need to cite them yourself.</div>
