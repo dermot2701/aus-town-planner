@@ -140,8 +140,13 @@
   .ask-dropzone-hint { font-size:12px; color:var(--text-faint); line-height:1.6 }
   .ask-previews { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px }
   .ask-previews:empty { margin-top:0 }
+  .ask-thumb-wrap { position:relative; width:96px; height:96px }
   .ask-thumb { width:96px; height:96px; object-fit:cover; border-radius:6px;
                border:1px solid var(--border-subtle); display:block }
+  .ask-thumb-x { position:absolute; top:-8px; right:-8px; width:20px; height:20px; padding:0;
+                 border:none; border-radius:50%; background:var(--accent,#2dd4bf); color:#06121a;
+                 font-size:14px; line-height:20px; font-weight:700; cursor:pointer;
+                 box-shadow:0 1px 3px rgba(0,0,0,.4) }
   .spin{display:inline-block;width:16px;height:16px;border:2px solid currentColor;
         border-right-color:transparent;border-radius:50%;animation:hollyspin .7s linear infinite;
         vertical-align:middle;margin-right:8px}
@@ -174,32 +179,73 @@
       });
     });
 
-    // Drag-and-drop image attachments. Wires a drop zone to a hidden file input
-    // and shows client-side thumbnail previews. Works for the ask + refine forms.
+    // Drag-and-drop image attachments. Accumulates files across multiple drops
+    // and picker selections (a fresh drop used to *replace* the input, so only the
+    // last batch survived). Keeps a persistent DataTransfer as the source of truth,
+    // dedups by name+size+mtime, caps at MAX, and renders removable thumbnails.
     function wireDropzone(zoneId, inputId, previewId) {
       var zone = document.getElementById(zoneId);
       var input = document.getElementById(inputId);
       var previews = document.getElementById(previewId);
       if (!zone || !input || !previews) return;
       var MAX = 4;
+      var store = new DataTransfer();   // accumulator — the authoritative file list
+
+      function sync() { input.files = store.files; render(); }
+
+      function key(f) { return f.name + '|' + f.size + '|' + f.lastModified; }
+
+      function add(fileList) {
+        var existing = {};
+        Array.prototype.forEach.call(store.files, function (f) { existing[key(f)] = true; });
+        Array.prototype.forEach.call(fileList, function (f) {
+          if (!/^image\//.test(f.type)) return;
+          if (existing[key(f)]) return;            // skip duplicates
+          if (store.items.length >= MAX) return;   // respect the cap
+          store.items.add(f);
+          existing[key(f)] = true;
+        });
+        sync();
+      }
+
+      function removeAt(i) {
+        store.items.remove(i);
+        sync();
+      }
 
       function render() {
         previews.innerHTML = '';
-        Array.prototype.slice.call(input.files, 0, MAX).forEach(function (file) {
-          if (!/^image\//.test(file.type)) return;
+        Array.prototype.slice.call(store.files).forEach(function (file, i) {
+          var wrap = document.createElement('div');
+          wrap.className = 'ask-thumb-wrap';
           var img = document.createElement('img');
           img.className = 'ask-thumb';
           img.title = file.name;
           var reader = new FileReader();
           reader.onload = function (e) { img.src = e.target.result; };
           reader.readAsDataURL(file);
-          previews.appendChild(img);
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'ask-thumb-x';
+          btn.setAttribute('aria-label', 'Remove ' + file.name);
+          btn.textContent = '×';
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation(); removeAt(i);
+          });
+          wrap.appendChild(img);
+          wrap.appendChild(btn);
+          previews.appendChild(wrap);
         });
       }
+
       zone.addEventListener('click', function (e) {
-        if (e.target.tagName !== 'INPUT') input.click();
+        if (e.target.tagName !== 'INPUT' && e.target.className !== 'ask-thumb-x') input.click();
       });
-      input.addEventListener('change', render);
+      // Picker selection: merge in, then clear the input's own selection so the
+      // accumulator (reassigned in sync()) stays the single source of truth.
+      input.addEventListener('change', function () {
+        if (input.files && input.files.length) add(input.files);
+      });
       ['dragenter', 'dragover'].forEach(function (ev) {
         zone.addEventListener(ev, function (e) {
           e.preventDefault(); e.stopPropagation(); zone.classList.add('dragover');
@@ -211,12 +257,7 @@
         });
       });
       zone.addEventListener('drop', function (e) {
-        var dt = new DataTransfer();
-        Array.prototype.slice.call(e.dataTransfer.files, 0, MAX).forEach(function (f) {
-          if (/^image\//.test(f.type)) dt.items.add(f);
-        });
-        input.files = dt.files;
-        render();
+        add(e.dataTransfer.files);
       });
     }
     wireDropzone('dropZone', 'imgInput', 'imgPreviews');
