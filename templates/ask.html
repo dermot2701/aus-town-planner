@@ -21,12 +21,15 @@
   <input type="hidden" name="supplied" value="{{ supplied_json }}">
   <input type="hidden" name="images_json" value="{{ images_json }}">
 
-  {% if continued_from and not answer %}
+  {% if continued_from %}
   <div class="app-alert info" style="margin-bottom:12px">
-    Continuing from an earlier run. The question, any context you provided, and attached
-    images are loaded below — edit the question, add more, then ask again. Your re-ask is
-    saved as a new History entry; the original is kept.
+    Continuing from an earlier run. The question and any context/images are loaded.
+    {% if answer %}Holly's last response is shown below — <strong>comment on it to correct Holly or
+    ask for further points</strong>, and she reworks starting from that answer. Or edit the question
+    above and ask again.{% else %}Edit the question, add more, then ask again.{% endif %}
+    Each run is saved as a new History entry; the original is kept.
   </div>
+  {% if not answer %}
   {% if images %}
   <div class="form-group" style="margin-bottom:12px">
     <label class="form-label">Carried-over images ({{ images|length }})</label>
@@ -48,6 +51,7 @@
       {% endfor %}
     </div>
   </div>
+  {% endif %}
   {% endif %}
   {% endif %}
 
@@ -103,24 +107,27 @@
     <div class="holly-answer">{{ answer | mdlite }}</div>
   </div>
 
-  <!-- Always available after an answer: correct wrong details (street names,
-       dimensions — often misread from an image) and have Holly rework. The
-       correction is recorded as authoritative planner-supplied context. -->
+  <!-- Always available after an answer: comment on Holly's response to correct
+       wrong details (street names, dimensions — often misread from an image) or
+       ask for further points. Holly reworks starting from this answer (carried in
+       prior_answer); corrections are recorded as authoritative supplied context. -->
   <form id="correctForm" method="POST" action="{{ url_for('ask_holly') }}" enctype="multipart/form-data" class="app-card app-card-padded" style="margin-top:16px">
-    <div class="app-card-header"><div class="app-section-title">Correct &amp; rework</div></div>
+    <div class="app-card-header"><div class="app-section-title">Comment, correct &amp; rework</div></div>
     <p class="form-hint" style="margin-top:0;margin-bottom:12px">
-      Spotted a wrong street name, dimension or label (often read from an attached image)? Tell Holly
-      what's correct — your correction is <strong>authoritative</strong> and overrides any image-derived
-      or earlier value. Holly reworks the answer and saves it as a new History entry.
+      Comment on Holly's answer above to <strong>correct a detail</strong> (a wrong street name,
+      dimension or label — often read from an image; your correction is authoritative and overrides it)
+      or <strong>ask for further points</strong> to be addressed. Holly reworks <em>starting from this
+      answer</em> — keeping what's right — and saves a new History entry.
     </p>
     <textarea name="question" style="display:none">{{ question }}</textarea>
     <input type="hidden" name="supplied" value="{{ supplied_json }}">
     <input type="hidden" name="images_json" value="{{ images_json }}">
+    <textarea name="prior_answer" style="display:none">{{ answer }}</textarea>
     <div class="form-group">
       <textarea class="app-textarea" name="corrections" rows="3"
-        placeholder="e.g. The site fronts Montgomery Court, not Regent Street. Frontage is 18 m, not 22 m. The existing dwelling is 'Old Bishop's Quarters'."></textarea>
+        placeholder="e.g. The site fronts Montgomery Court, not Regent Street; frontage is 18 m, not 22 m. Also address solar access and stormwater disposal for the rear lot."></textarea>
     </div>
-    <button id="correctBtn" type="submit" class="app-btn primary lg" style="white-space:nowrap">Rework with corrections</button>
+    <button id="correctBtn" type="submit" class="app-btn primary lg" style="white-space:nowrap">Rework with comments</button>
   </form>
 
   {% if images %}
@@ -157,6 +164,7 @@
     <textarea name="question" style="display:none">{{ question }}</textarea>
     <input type="hidden" name="supplied" value="{{ supplied_json }}">
     <input type="hidden" name="images_json" value="{{ images_json }}">
+    <textarea name="prior_answer" style="display:none">{{ answer }}</textarea>
     {% for q in follow_ups %}
     <div class="form-group">
       <label class="form-label">{{ q }}</label>

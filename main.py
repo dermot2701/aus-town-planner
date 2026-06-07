@@ -1300,6 +1300,11 @@ def ask_holly():
                           if isinstance(img, dict)
                           and _UPLOAD_NAME_RE.match(str(img.get("key", "")).split("/")[-1])]
             continued_from = run.get("id")
+            # Carry Holly's last response forward so the rework starts from it —
+            # the planner comments on this answer to correct it or ask for more,
+            # rather than regenerating from scratch. Prose kinds only.
+            if run.get("kind") in ("ask", "council"):
+                answer = run.get("output") or None
     if request.method == "POST":
         question = request.form.get("question", "").strip()
         supplied = _collect_supplied()
@@ -1334,11 +1339,25 @@ def ask_holly():
                         "(site plan/drawing/map). Read them per your instructions: report "
                         "observable facts under 'Image observations', flag estimates, and treat "
                         "any dimensions as image-derived planner input — never as corpus citations.")
+                # Rework mode: the planner is reworking a previous answer (carried in
+                # a hidden field by the Correct & rework / refine forms). Give Holly
+                # that answer to build on, applying the planner's corrections/comments
+                # and addressing any further points — not regenerating from scratch.
+                prior_answer = (request.form.get("prior_answer") or "").strip()
+                prior_block = ""
+                if prior_answer:
+                    prior_block = (
+                        "\n\nYOUR PREVIOUS ANSWER (the planner is reworking this). Produce an "
+                        "updated answer that: applies the planner's corrections/comments above "
+                        "(authoritative — override any conflicting value), keeps what is still "
+                        "correct, and addresses any further points they raised. Do not start from "
+                        "scratch or drop established findings unless a correction supersedes them:\n"
+                        + prior_answer[:12000])
                 prompt = (
                     f"Today's date is {datetime.now(tz=TAS).strftime('%d %B %Y')}.\n\n"
                     f"{_skills_context()}\n\n"
                     f"CONTEXT (scheme clauses and decisions — cite only these):\n{_format_context(ctx)}"
-                    f"{supplied_block}{image_block}\n\n"
+                    f"{supplied_block}{image_block}{prior_block}\n\n"
                     f"QUESTION: {question}"
                 )
                 try:
