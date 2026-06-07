@@ -8,46 +8,48 @@
   <p class="page-sub">Ask a planning question — Holly answers from the ingested scheme clauses and TASCAT decisions only. {{ caveat }}</p>
 </header>
 
-<div class="grid-2" style="align-items:start">
-  <!-- ── Question form ────────────────────────────────────────────── -->
-  <form id="askForm" method="POST" action="{{ url_for('ask_holly') }}" class="app-card app-card-padded">
-    <div class="app-card-header"><div class="app-section-title">Your question</div></div>
-    {% if not gemini %}
-    <div class="app-alert warning" style="margin-bottom:12px">No Gemini API key — Holly is offline.</div>
-    {% endif %}
-    <div class="form-group">
-      <textarea class="app-textarea" name="question" rows="5"
-        placeholder="e.g. What are the acceptable solutions for building height in the General Residential zone in Hobart? Or: Has TASCAT considered short-stay accommodation in residential zones?">{{ question }}</textarea>
-      <div class="form-hint">Holly retrieves relevant clauses and decisions automatically — no need to cite them yourself.</div>
-    </div>
-    <button id="askBtn" type="submit" class="app-btn primary lg w-full" style="justify-content:center" {% if not gemini %}disabled{% endif %}>Ask Holly</button>
-  </form>
-
-  <!-- ── Answer ───────────────────────────────────────────────────── -->
-  <div id="answerCol">
-    {% if error %}
-    <div class="app-card app-card-padded">
-      <div class="app-alert danger">{{ error }}</div>
-    </div>
-    {% elif answer %}
-    <div class="app-card app-card-padded">
-      <div class="app-card-header">
-        <div class="app-section-title">Holly</div>
-        <span class="app-badge info">Grounded · cited</span>
-      </div>
-      <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap">{{ answer }}</div>
-    </div>
-    {% else %}
-    <div class="app-card app-card-padded" style="height:100%;display:flex;align-items:center;justify-content:center">
-      <p class="text-faint" style="text-align:center;max-width:280px">
-        Ask a planning question. Holly will retrieve the relevant scheme clauses and TASCAT decisions and answer based solely on that context — every claim will be traceable.
-      </p>
-    </div>
-    {% endif %}
+<!-- ── Question: full width across the top ───────────────────────── -->
+<form id="askForm" method="POST" action="{{ url_for('ask_holly') }}" class="app-card app-card-padded" style="margin-bottom:20px">
+  <div class="app-card-header"><div class="app-section-title">Your question</div></div>
+  {% if not gemini %}
+  <div class="app-alert warning" style="margin-bottom:12px">No Gemini API key — Holly is offline.</div>
+  {% endif %}
+  <div class="form-group">
+    <textarea class="app-textarea" name="question" rows="3"
+      placeholder="e.g. What are the acceptable solutions for building height in the General Residential zone in Hobart? Or: Has TASCAT considered short-stay accommodation in residential zones?">{{ question }}</textarea>
   </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div class="form-hint" style="margin:0">Holly retrieves relevant clauses and decisions automatically — no need to cite them yourself.</div>
+    <button id="askBtn" type="submit" class="app-btn primary lg" style="white-space:nowrap" {% if not gemini %}disabled{% endif %}>Ask Holly</button>
+  </div>
+</form>
+
+<!-- ── Answer: full width below ──────────────────────────────────── -->
+<div id="answerCol">
+  {% if error %}
+  <div class="app-card app-card-padded">
+    <div class="app-alert danger">{{ error }}</div>
+  </div>
+  {% elif answer %}
+  <div class="app-card app-card-padded">
+    <div class="app-card-header">
+      <div class="app-section-title">Holly</div>
+      <span class="app-badge info">Grounded · cited</span>
+    </div>
+    <div class="holly-answer">{{ answer | mdlite }}</div>
+  </div>
+  {% else %}
+  <div class="app-card app-card-padded" style="min-height:220px;display:flex;align-items:center;justify-content:center">
+    <p class="text-faint" style="text-align:center;max-width:440px">
+      Ask a planning question. Holly will retrieve the relevant scheme clauses and TASCAT decisions and answer based solely on that context — every claim will be traceable.
+    </p>
+  </div>
+  {% endif %}
 </div>
 
 <style>
+  .holly-answer { font-size:14px; color:var(--text-secondary); line-height:1.8; white-space:pre-wrap; word-break:break-word }
+  .holly-answer hr.md-rule { border:none; border-top:1px solid var(--border-subtle); margin:10px 0 }
   .spin{display:inline-block;width:16px;height:16px;border:2px solid currentColor;
         border-right-color:transparent;border-radius:50%;animation:hollyspin .7s linear infinite;
         vertical-align:middle;margin-right:8px}
@@ -66,7 +68,7 @@
       var col = document.getElementById('answerCol');
       if (col) {
         col.innerHTML =
-          '<div class="app-card app-card-padded" style="height:100%;display:flex;' +
+          '<div class="app-card app-card-padded" style="min-height:220px;display:flex;' +
           'flex-direction:column;align-items:center;justify-content:center;gap:14px">' +
           '<span class="spin spin-lg"></span>' +
           '<p class="text-faint" style="text-align:center;max-width:280px">' +
