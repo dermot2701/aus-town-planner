@@ -103,6 +103,26 @@
     <div class="holly-answer">{{ answer | mdlite }}</div>
   </div>
 
+  <!-- Always available after an answer: correct wrong details (street names,
+       dimensions — often misread from an image) and have Holly rework. The
+       correction is recorded as authoritative planner-supplied context. -->
+  <form id="correctForm" method="POST" action="{{ url_for('ask_holly') }}" enctype="multipart/form-data" class="app-card app-card-padded" style="margin-top:16px">
+    <div class="app-card-header"><div class="app-section-title">Correct &amp; rework</div></div>
+    <p class="form-hint" style="margin-top:0;margin-bottom:12px">
+      Spotted a wrong street name, dimension or label (often read from an attached image)? Tell Holly
+      what's correct — your correction is <strong>authoritative</strong> and overrides any image-derived
+      or earlier value. Holly reworks the answer and saves it as a new History entry.
+    </p>
+    <textarea name="question" style="display:none">{{ question }}</textarea>
+    <input type="hidden" name="supplied" value="{{ supplied_json }}">
+    <input type="hidden" name="images_json" value="{{ images_json }}">
+    <div class="form-group">
+      <textarea class="app-textarea" name="corrections" rows="3"
+        placeholder="e.g. The site fronts Montgomery Court, not Regent Street. Frontage is 18 m, not 22 m. The existing dwelling is 'Old Bishop's Quarters'."></textarea>
+    </div>
+    <button id="correctBtn" type="submit" class="app-btn primary lg" style="white-space:nowrap">Rework with corrections</button>
+  </form>
+
   {% if images %}
   <div class="app-card app-card-padded" style="margin-top:16px">
     <div class="app-card-header"><div class="app-section-title">Images Holly read ({{ images|length }})</div></div>
@@ -193,7 +213,7 @@
 <script>
   (function () {
     // Spinner for the ask + refine forms (not the PDF download form).
-    ['askForm', 'refineForm'].forEach(function (id) {
+    ['askForm', 'refineForm', 'correctForm'].forEach(function (id) {
       var form = document.getElementById(id);
       if (!form) return;
       form.addEventListener('submit', function () {

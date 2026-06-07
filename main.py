@@ -1266,6 +1266,13 @@ def _collect_supplied():
     for q, a in zip(request.form.getlist("fu_question"), request.form.getlist("fu_answer")):
         if (a or "").strip():
             supplied.append({"q": (q or "").strip(), "a": a.strip()})
+    # Free-text corrections from the "Correct & rework" form. Recorded as an
+    # authoritative planner correction so the prompt can override any value Holly
+    # previously derived (e.g. a street name or dimension misread from an image).
+    corr = (request.form.get("corrections") or "").strip()
+    if corr:
+        supplied.append({"q": "Planner correction (authoritative — overrides any "
+                              "image-derived or previously stated value)", "a": corr})
     return supplied
 
 
@@ -1313,7 +1320,11 @@ def ask_holly():
                     supplied_block = (
                         "\n\nADDITIONAL CONTEXT SUPPLIED BY THE PLANNER "
                         "(facts are established; any clause text here is planner-supplied — "
-                        "attribute it as '(planner-supplied)', distinct from the corpus):\n"
+                        "attribute it as '(planner-supplied)', distinct from the corpus). "
+                        "Where a planner correction conflicts with a value you would otherwise "
+                        "use — especially a street name, dimension or label read from an image — "
+                        "the planner's correction is AUTHORITATIVE: adopt it and discard the "
+                        "earlier value:\n"
                         + "\n".join(f"- Q: {p['q']}\n  A: {p['a']}" for p in supplied))
                 img_parts = _images_as_gemini_parts(image_refs)
                 image_block = ""
