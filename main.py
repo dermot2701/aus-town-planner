@@ -1266,6 +1266,13 @@ def _collect_supplied():
     for q, a in zip(request.form.getlist("fu_question"), request.form.getlist("fu_answer")):
         if (a or "").strip():
             supplied.append({"q": (q or "").strip(), "a": a.strip()})
+    # Free-text corrections from the "Correct & rework" form. Recorded as an
+    # authoritative planner correction so the prompt can override any value Holly
+    # previously derived (e.g. a street name or dimension misread from an image).
+    corr = (request.form.get("corrections") or "").strip()
+    if corr:
+        supplied.append({"q": "Planner correction (authoritative — overrides any "
+                              "image-derived or previously stated value)", "a": corr})
     return supplied
 
 
@@ -1278,6 +1285,21 @@ def ask_holly():
     follow_ups = []
     supplied = []
     image_refs = []
+    continued_from = None
+    if request.method == "GET" and request.args.get("from"):
+        # Continue working on a prior run: pre-load its question, planner-supplied
+        # context and attached images so the planner can add to it and re-ask. The
+        # re-ask is saved as a new History entry — the original run is untouched.
+        run = next((r for r in (load_json(_HISTORY_FILE) or {}).get("runs", [])
+                    if r.get("id") == request.args["from"]), None)
+        if run:
+            question = run.get("prompt") or run.get("title") or ""
+            supplied = [p for p in (run.get("supplied") or [])
+                        if isinstance(p, dict)]
+            image_refs = [img for img in ((run.get("meta") or {}).get("images") or [])
+                          if isinstance(img, dict)
+                          and _UPLOAD_NAME_RE.match(str(img.get("key", "")).split("/")[-1])]
+            continued_from = run.get("id")
     if request.method == "POST":
         question = request.form.get("question", "").strip()
         supplied = _collect_supplied()
@@ -1298,7 +1320,11 @@ def ask_holly():
                     supplied_block = (
                         "\n\nADDITIONAL CONTEXT SUPPLIED BY THE PLANNER "
                         "(facts are established; any clause text here is planner-supplied — "
-                        "attribute it as '(planner-supplied)', distinct from the corpus):\n"
+                        "attribute it as '(planner-supplied)', distinct from the corpus). "
+                        "Where a planner correction conflicts with a value you would otherwise "
+                        "use — especially a street name, dimension or label read from an image — "
+                        "the planner's correction is AUTHORITATIVE: adopt it and discard the "
+                        "earlier value:\n"
                         + "\n".join(f"- Q: {p['q']}\n  A: {p['a']}" for p in supplied))
                 img_parts = _images_as_gemini_parts(image_refs)
                 image_block = ""
@@ -1336,7 +1362,8 @@ def ask_holly():
     return render_template("ask.html", question=question, answer=answer, error=error,
                            follow_ups=follow_ups, supplied=supplied,
                            supplied_json=json.dumps(supplied), images=image_refs,
-                           images_json=json.dumps(image_refs), gemini=bool(GEMINI_API_KEY))
+                           images_json=json.dumps(image_refs), continued_from=continued_from,
+                           gemini=bool(GEMINI_API_KEY))
 
 
 @app.route("/ask/pdf", methods=["POST"])

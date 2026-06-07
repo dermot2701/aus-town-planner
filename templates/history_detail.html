@@ -12,6 +12,7 @@
     </p>
   </div>
   <div style="display:flex;gap:8px">
+    <a class="app-btn sm primary" href="{{ url_for('ask_holly') }}?from={{ run.id }}">Continue in Ask Holly</a>
     <button type="button" class="app-btn sm" onclick="copyText('.hist-answer, .hist-pre', this)">Copy</button>
     <a class="app-btn sm" href="{{ url_for('history_pdf', rid=run.id) }}" target="_blank">Download PDF</a>
     <a class="app-btn sm" href="{{ url_for('history') }}">Back</a>

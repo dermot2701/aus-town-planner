@@ -14,6 +14,43 @@
   {% if not gemini %}
   <div class="app-alert warning" style="margin-bottom:12px">No Gemini API key — Holly is offline.</div>
   {% endif %}
+
+  <!-- Carry prior planner-supplied context and attached images forward when
+       continuing a History entry (or after an answer). _collect_supplied /
+       _collect_images read these on POST; new uploads below are merged in. -->
+  <input type="hidden" name="supplied" value="{{ supplied_json }}">
+  <input type="hidden" name="images_json" value="{{ images_json }}">
+
+  {% if continued_from and not answer %}
+  <div class="app-alert info" style="margin-bottom:12px">
+    Continuing from an earlier run. The question, any context you provided, and attached
+    images are loaded below — edit the question, add more, then ask again. Your re-ask is
+    saved as a new History entry; the original is kept.
+  </div>
+  {% if images %}
+  <div class="form-group" style="margin-bottom:12px">
+    <label class="form-label">Carried-over images ({{ images|length }})</label>
+    <div class="ask-previews">
+      {% for img in images %}
+      <a href="{{ url_for('serve_upload', name=img.key.split('/')|last) }}" target="_blank" title="{{ img.name }}">
+        <img class="ask-thumb" src="{{ url_for('serve_upload', name=img.key.split('/')|last) }}" alt="{{ img.name }}">
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if supplied %}
+  <div class="form-group" style="margin-bottom:12px">
+    <label class="form-label">Carried-over context ({{ supplied|length }})</label>
+    <div style="font-size:12px;color:var(--text-faint);line-height:1.6">
+      {% for p in supplied %}
+      <div style="margin-bottom:8px"><span style="color:var(--text-secondary)">{{ p.q }}</span><br>{{ p.a }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
   <div class="form-group">
     <textarea class="app-textarea" name="question" rows="14" style="min-height:320px;resize:vertical"
       placeholder="e.g. What are the acceptable solutions for building height in the General Residential zone in Hobart? Or: Has TASCAT considered short-stay accommodation in residential zones? (Paste long, detailed briefs here — drag the bottom-right corner to resize.)">{{ question }}</textarea>
@@ -65,6 +102,26 @@
     </div>
     <div class="holly-answer">{{ answer | mdlite }}</div>
   </div>
+
+  <!-- Always available after an answer: correct wrong details (street names,
+       dimensions — often misread from an image) and have Holly rework. The
+       correction is recorded as authoritative planner-supplied context. -->
+  <form id="correctForm" method="POST" action="{{ url_for('ask_holly') }}" enctype="multipart/form-data" class="app-card app-card-padded" style="margin-top:16px">
+    <div class="app-card-header"><div class="app-section-title">Correct &amp; rework</div></div>
+    <p class="form-hint" style="margin-top:0;margin-bottom:12px">
+      Spotted a wrong street name, dimension or label (often read from an attached image)? Tell Holly
+      what's correct — your correction is <strong>authoritative</strong> and overrides any image-derived
+      or earlier value. Holly reworks the answer and saves it as a new History entry.
+    </p>
+    <textarea name="question" style="display:none">{{ question }}</textarea>
+    <input type="hidden" name="supplied" value="{{ supplied_json }}">
+    <input type="hidden" name="images_json" value="{{ images_json }}">
+    <div class="form-group">
+      <textarea class="app-textarea" name="corrections" rows="3"
+        placeholder="e.g. The site fronts Montgomery Court, not Regent Street. Frontage is 18 m, not 22 m. The existing dwelling is 'Old Bishop's Quarters'."></textarea>
+    </div>
+    <button id="correctBtn" type="submit" class="app-btn primary lg" style="white-space:nowrap">Rework with corrections</button>
+  </form>
 
   {% if images %}
   <div class="app-card app-card-padded" style="margin-top:16px">
@@ -156,7 +213,7 @@
 <script>
   (function () {
     // Spinner for the ask + refine forms (not the PDF download form).
-    ['askForm', 'refineForm'].forEach(function (id) {
+    ['askForm', 'refineForm', 'correctForm'].forEach(function (id) {
       var form = document.getElementById(id);
       if (!form) return;
       form.addEventListener('submit', function () {

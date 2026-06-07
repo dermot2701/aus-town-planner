@@ -63,6 +63,53 @@ the corpus.
   `ESTIMATE`s; the output is explicitly indicative and not a sealed plan.
 - **The caveat** is stamped on every answer.
 
+## Verifying subdivision standards are present
+
+For the smoothest experience, confirm the zone's subdivision standards are
+already in the corpus **before** asking Holly — otherwise she will correctly ask
+the planner to paste them rather than guess. Standards live in
+`scheme_chunks.json`: minimum lot size, frontage and setbacks come from the
+**SPP** (statewide) and the relevant **zone code**; particular-purpose-zone
+tweaks come from the **municipality's LPS**. `retrieve()` scopes to *statewide
+SPP + that municipality's LPS*, so both layers must be present.
+
+Checklist:
+
+1. **Check `/scheme` first.** Set the municipality, then search the zone plus
+   terms like `minimum lot`, `frontage`, `setback`, `subdivision`. If the actual
+   numbers appear, each cited to a clause ID, you're done — Holly will cite them.
+2. **If missing or thin, re-ingest (order matters — SPP first, then LPS).**
+   ```bash
+   ./venv/bin/python -m ingest.scheme               # statewide SPP standards
+   ./venv/bin/python -m ingest.lps --discover        # id -> council map
+   ./venv/bin/python -m ingest.lps --scheme-id 15    # merge that council's LPS
+   ```
+   Then upload **both** the chunks and the manifest to the GCS bucket root
+   (deploys do not update GCS data):
+   ```bash
+   gcloud storage cp data/scheme_chunks.json   gs://aus-town-planner-data/scheme_chunks.json   --project=aus-town-planner
+   gcloud storage cp data/scheme_manifest.json gs://aus-town-planner-data/scheme_manifest.json --project=aus-town-planner
+   ```
+3. **Seed the leading TASCAT precedents** so the derivation has subdivision
+   authority to cite:
+   ```bash
+   ./venv/bin/python -m ingest.decisions --seed --merge
+   gcloud storage cp data/decisions.json gs://aus-town-planner-data/decisions.json --project=aus-town-planner
+   ```
+4. **Re-verify in `/scheme`.** Table-heavy standards (lot-size / density tables)
+   can be mangled when the SPP PDF is extracted, so confirm the numbers actually
+   landed after re-ingesting — don't assume.
+5. **Last-resort backstop.** If a known standard still won't capture from source,
+   add it to `_SUPPLEMENT_CHUNKS` in `main.py` — paste the clause **verbatim**
+   with its real `clause_id` and `provenance: "LIVE"`. It ships in code, so it is
+   always available without a GCS upload.
+
+> ⚠️ Never run `ingest.lps --replace` for this — it overwrites
+> `scheme_chunks.json` and drops the SPP. The default merge keeps the SPP and
+> other councils.
+
+See [INGESTION.md](INGESTION.md) for the full ingestion pipeline and flags.
+
 ## Where it lives in the code
 
 There is **no new route or solver** — it is a capability of the existing
