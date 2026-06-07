@@ -122,17 +122,26 @@ planner-pasted clause text **attributed as `(planner-supplied)`**, kept distinct
 from the ingested corpus (it still never invents). The loop repeats — each refine
 accumulates context and may surface new questions.
 
-**Correct & rework.** The refine loop only opens when Holly flags its *own* gaps;
-a confident-but-wrong answer (notably a street name or dimension misread from an
-attached image) gave the planner no way in. So a **Correct & rework** form is shown
-after **every** answer with a free-text corrections box. On submit, `_collect_supplied()`
-captures the text as an authoritative entry (`q = "Planner correction (authoritative
-— overrides any image-derived or previously stated value)"`), and the **ADDITIONAL
-CONTEXT SUPPLIED BY THE PLANNER** block instructs Holly that where a correction
-conflicts with a value she would otherwise use — especially an image-derived street
-name or dimension — the correction is authoritative: adopt it and discard the earlier
-value. Holly reworks and the result is saved as a new History run; the correction
-carries forward like any other supplied context.
+**Comment, correct & rework.** The refine loop only opens when Holly flags its *own*
+gaps; a confident-but-wrong answer (notably a street name or dimension misread from an
+attached image) gave the planner no way in. So a **Comment, correct & rework** form is
+shown after **every** answer with a free-text box used either to **correct a detail** or
+to **ask for further points** to be addressed. On submit, `_collect_supplied()` captures
+the text as an authoritative entry (`q = "Planner correction (authoritative — overrides
+any image-derived or previously stated value)"`), and the **ADDITIONAL CONTEXT SUPPLIED
+BY THE PLANNER** block instructs Holly that where a correction conflicts with a value she
+would otherwise use — especially an image-derived street name or dimension — the
+correction is authoritative: adopt it and discard the earlier value.
+
+Crucially, the rework **builds on Holly's previous answer rather than regenerating from
+scratch.** The form carries that answer in a hidden `prior_answer` field (the refine form
+does too); when present, the prompt gains a **YOUR PREVIOUS ANSWER** block instructing
+Holly to produce an *updated* answer — apply the planner's corrections/comments, keep
+what's still correct, and address any further points — without dropping established
+findings unless a correction supersedes them. (A fresh re-ask via the top **Ask Holly**
+button sends no `prior_answer`, so it regenerates; the rework/continuity path is the
+comment form.) Each rework is saved as a new History run and the correction carries
+forward like any other supplied context.
 
 **Image attachments (multimodal).** Planners can drag-drop (or browse) up to **4
 images** — site plans, architect drawings, Google Maps / aerial screenshots — in a
@@ -192,14 +201,16 @@ user navigates away.
 
 **Continue in Ask Holly.** The History detail page has a **Continue in Ask Holly**
 button that opens `/ask?from=<id>` pre-loaded with that run's question, planner-supplied
-context, and attached images — so a saved run can be worked further (edit the question,
-add more context/images, correct, re-ask). The `/ask` GET handler reads `?from=`, looks
-the run up in `history.json`, and seeds `question` / `supplied` / `image_refs` (image
-keys re-validated against `_UPLOAD_NAME_RE`); the main ask form carries the prior
-`supplied` and `images_json` forward via hidden fields, so the re-ask reuses the same
-carry-forward path as the refine loop. The re-ask is saved as a **new** History run —
-the original is never modified. No new route, engine, or storage; it rides the existing
-Ask Holly surface.
+context, attached images, **and — for `ask`/`council` runs — Holly's last response** —
+so a saved run can be worked further (comment to correct or extend, add context/images,
+edit the question, re-ask). The `/ask` GET handler reads `?from=`, looks the run up in
+`history.json`, and seeds `question` / `supplied` / `image_refs` (image keys re-validated
+against `_UPLOAD_NAME_RE`) plus `answer` from the run's `output`; the main ask form carries
+the prior `supplied` and `images_json` forward via hidden fields, so the re-ask reuses the
+same carry-forward path as the refine loop. Because the prior answer is loaded, the planner
+lands straight on the **Comment, correct & rework** form and Holly reworks *from* that
+answer (see above). The re-ask/rework is saved as a **new** History run — the original is
+never modified. No new route, engine, or storage; it rides the existing Ask Holly surface.
 
 ## Semantic RAG: what's stored vs. retrieved
 
