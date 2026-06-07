@@ -119,6 +119,8 @@ def login():
             session["user"] = username
             session["name"] = user.get("name", username)
             session["role"] = user.get("role", "user")
+            user["last_login"] = datetime.now(tz=TAS).isoformat()
+            save_json("users.json", users)
             return redirect(request.form.get("next") or url_for("home"))
         error = "Invalid credentials. Please try again."
     return render_template("login.html", error=error)
@@ -173,6 +175,19 @@ def _md_lite(text):
 
 
 app.jinja_env.filters["mdlite"] = _md_lite
+
+
+def _dtshort(iso):
+    """Format a stored ISO timestamp as a short, readable Tasmanian-local string."""
+    if not iso:
+        return "Never"
+    try:
+        return datetime.fromisoformat(iso).astimezone(TAS).strftime("%d %b %Y, %H:%M")
+    except (ValueError, TypeError):
+        return str(iso)
+
+
+app.jinja_env.filters["dtshort"] = _dtshort
 
 
 # ── Gemini factory ────────────────────────────────────────────────────────────
