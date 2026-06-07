@@ -18,6 +18,15 @@
   </div>
 </header>
 
+{% set prompt_text = run.prompt if run.prompt is defined and run.prompt else run.title %}
+{% set prompt_labels = {'ask': 'Question', 'council': 'Question', 'review': 'Proposal', 'caselaw': 'Decision text'} %}
+{% if prompt_text %}
+<div class="app-card app-card-padded" style="margin-bottom:16px">
+  <div class="app-card-header"><div class="app-section-title">{{ prompt_labels.get(run.kind, 'Question / input') }}</div></div>
+  <div class="hist-prompt">{{ prompt_text }}</div>
+</div>
+{% endif %}
+
 {% if run.supplied %}
 <div class="app-card app-card-padded" style="margin-bottom:16px">
   <div class="app-card-header"><div class="app-section-title">Planner-supplied context</div></div>
@@ -39,6 +48,8 @@
 </div>
 
 <style>
+  .hist-prompt { font-size:13px; color:var(--text-secondary); line-height:1.7; white-space:pre-wrap;
+                 word-break:break-word; max-height:340px; overflow:auto }
   .hist-answer { font-size:14px; color:var(--text-secondary); line-height:1.8; white-space:pre-wrap; word-break:break-word }
   .hist-answer hr.md-rule { border:none; border-top:1px solid var(--border-subtle); margin:10px 0 }
   .hist-pre { font-family:var(--font-mono); font-size:12px; color:var(--text-secondary); line-height:1.6;
