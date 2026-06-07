@@ -886,6 +886,10 @@ _HOLLY_SYSTEM = (
     "planner-supplied text as if it were a verified corpus citation, and still never invent anything. "
     "End every response with the caveat: '" + CAVEAT + "'"
 )
+_HOLLY_SYSTEM += (
+    " If you state a date (e.g. a report date), use the current date supplied in the "
+    "prompt — never invent, guess, or use a date from your training data."
+)
 
 _CASELAW_SYSTEM = (
     "You are a Tasmanian planning law analyst. Analyse a planning tribunal decision and "
@@ -1076,6 +1080,7 @@ def ask_holly():
                         "attribute it as '(planner-supplied)', distinct from the corpus):\n"
                         + "\n".join(f"- Q: {p['q']}\n  A: {p['a']}" for p in supplied))
                 prompt = (
+                    f"Today's date is {datetime.now(tz=TAS).strftime('%d %B %Y')}.\n\n"
                     f"{_skills_context()}\n\n"
                     f"CONTEXT (scheme clauses and decisions — cite only these):\n{_format_context(ctx)}"
                     f"{supplied_block}\n\n"
