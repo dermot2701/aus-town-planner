@@ -80,6 +80,11 @@ SEED_CITATIONS = [
     "[2022] TASCAT 157",   # Julie Alexander v Hobart City Council
     "[2024] TASCAT 43",    # Smith v Latrobe Council
     "[2022] TASCAT 79",    # Chau Nominees v Hobart City Council
+    # Recent Resource & Planning matters (2025–2026)
+    "[2026] TASCAT 2",     # Richardson v General Manager of the City of Launceston
+    "[2026] TASCAT 5",     # Randall v Hobart City Council
+    "[2025] TASCAT 229",   # Griggs v Kingborough Council
+    "[2025] TASCAT 221",   # Maclaine-Cross v Launceston City Council
 ]
 
 _CITATION_RE = re.compile(r"\[(\d{4})\]\s+(TASCAT|TASRMPAT)\s+(\d+)")
