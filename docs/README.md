@@ -5,7 +5,7 @@ Developer documentation for the Tasmanian planning assessment assistant.
 | Doc | Read it for… |
 |-----|--------------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Stack, data-access rule (incl. `save_bytes`/`load_bytes` for image blobs), routes, AI surfaces, env vars, data file schemas, run history & image uploads |
-| [REVIEW_ENGINE.md](REVIEW_ENGINE.md) | How a proposal becomes a grounded assessment — retrieval, zone-aware scoring, semantic RAG, the Gemini + heuristic paths, output schema; Ask Holly (refine loop, correct & rework, multimodal image attachments, continue-from-history, PDF) and run history |
+| [REVIEW_ENGINE.md](REVIEW_ENGINE.md) | How a proposal becomes a grounded assessment — retrieval, zone-aware scoring, semantic RAG, the Gemini + heuristic paths, output schema; Ask Holly (refine loop, comment/correct & rework that builds on the prior answer, multimodal image attachments, continue-from-history, PDF) and run history |
 | [SUBDIVISION.md](SUBDIVISION.md) | Ask Holly's minimum-compliant-subdivision feasibility capability — min lot size/frontage/setbacks/yield derived from cited standards, with the grounding guardrails |
 | [COUNCIL.md](COUNCIL.md) | Planning Council — the 3-stage multi-LLM debate, provider config, the page layout/SSE client, and every known provider failure mode with its fix (Groq Cloudflare 1010, MiniMax host) |
 | [INGESTION.md](INGESTION.md) | Building the corpus — scheme clauses (SPP + LPS), TASCAT decisions, the semantic index, SAMPLE→LIVE provenance |

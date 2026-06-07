@@ -65,7 +65,7 @@ only) and live under the `uploads/` prefix.
 | `GET /scheme` | login | Browse/search SPP + LPS clauses, scoped by municipality |
 | `GET /decisions` | login | Keyword search of TASCAT decisions |
 | `GET/POST /caselaw` | login | Case Review — structured Gemini analysis of a pasted decision |
-| `GET/POST /ask`, `POST /ask/pdf` | login | Ask Holly — free-form planning Q&A (multimodal: accepts image attachments), refine loop, correct & rework, continue-from-history (`?from=<id>`), PDF export |
+| `GET/POST /ask`, `POST /ask/pdf` | login | Ask Holly — free-form planning Q&A (multimodal: accepts image attachments), refine loop, comment/correct & rework (builds on the prior answer), continue-from-history (`?from=<id>`), PDF export |
 | `GET /uploads/<name>` | login | Serve a stored Ask Holly image attachment — strict-regex key (rejects traversal / non-image names) |
 | `GET /council`, `GET /council/stream` | login | Planning Council — 3-stage multi-LLM debate (SSE) |
 | `GET /history`, `/history/<id>`, `/history/<id>/pdf` | login | Saved AI runs (Holly/Council/Review/Case Review) — list+filter, full prompt + output + attached-image thumbnails, PDF, and **Continue in Ask Holly** (`/ask?from=<id>`) |
