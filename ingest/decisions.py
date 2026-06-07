@@ -85,6 +85,40 @@ SEED_CITATIONS = [
     "[2026] TASCAT 5",     # Randall v Hobart City Council
     "[2025] TASCAT 229",   # Griggs v Kingborough Council
     "[2025] TASCAT 221",   # Maclaine-Cross v Launceston City Council
+    # Further frequently-cited R&P planning appeals (council respondents),
+    # citations confirmed from AustLII's most-cited / search index.
+    "[2022] TASCAT 2",     # A McCullagh v Northern Midlands Council
+    "[2022] TASCAT 5",     # Department of State Growth v Northern Midlands Council
+    "[2022] TASCAT 32",    # R Archer & N Tubb v Northern Midlands Council
+    "[2022] TASCAT 72",    # C Howlett v Clarence City Council
+    "[2022] TASCAT 80",    # Michele Mauceri v Burnie City Council
+    "[2022] TASCAT 92",    # M & J Purton v Waratah-Wynyard Council
+    "[2022] TASCAT 150",   # Fragrance Tas-Hobart (Elizabeth) Pty Ltd v Hobart City Council
+    "[2021] TASCAT 2",     # T Berry v Huon Valley Council
+    "[2021] TASCAT 8",     # M de Bomford v Dorset Council
+    "[2021] TASCAT 15",    # Insight (Tas) Pty Ltd v Latrobe Council
+    "[2023] TASCAT 119",   # Owens v Kingborough Council (No 2)
+    "[2023] TASCAT 129",   # Ryan v Circular Head Council (No 2) — Robbins Island
+    "[2023] TASCAT 142",   # MCB Developments Pty Ltd v Launceston City Council
+    "[2023] TASCAT 147",   # Woolcott Surveys Pty Ltd v George Town Council
+    "[2024] TASCAT 23",    # ACEN Robbins Island Pty Ltd v Circular Head Council
+    "[2024] TASCAT 117",   # Wandoo Pty Ltd v Hobart City Council
+    "[2024] TASCAT 121",   # Rowlands v Sorell Council
+    "[2024] TASCAT 139",   # Ierino v Hobart City Council
+    "[2024] TASCAT 155",   # Hall v Hobart City Council
+    "[2024] TASCAT 158",   # Allbrook v Kingborough City Council
+    "[2024] TASCAT 177",   # Julfran Pty Ltd v Sorell Council
+    "[2024] TASCAT 178",   # Tabart v Central Coast Council
+    "[2024] TASCAT 188",   # Carthew-Wakefield v Sorell Council (No 2)
+    "[2024] TASCAT 191",   # Bellerive Yacht Club Inc v Clarence City Council
+    "[2024] TASCAT 229",   # Jacobs v Hobart City Council (No 3)
+    "[2025] TASCAT 7",     # Edwards v Glenorchy City Council
+    "[2025] TASCAT 37",    # Warren v Devonport City Council
+    "[2025] TASCAT 48",    # Arnold v Launceston City Council
+    "[2025] TASCAT 76",    # Neilsen v George Town Council
+    "[2025] TASCAT 87",    # Shoobridge & McDonald v Tasman Council (No 2)
+    "[2025] TASCAT 89",    # Lisbon House Properties Pty Ltd v Burnie City Council
+    "[2025] TASCAT 106",   # Hookway v Northern Midlands Council
 ]
 
 _CITATION_RE = re.compile(r"\[(\d{4})\]\s+(TASCAT|TASRMPAT)\s+(\d+)")
