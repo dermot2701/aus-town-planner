@@ -1091,6 +1091,24 @@ _HOLLY_SYSTEM += (
     "assessment, attributed as '(image-derived)', and are NOT corpus citations. Then assess the "
     "question against the ingested scheme clauses and TASCAT decisions as usual."
 )
+_HOLLY_SYSTEM += (
+    " When the planner asks about subdivision potential or the smallest/minimum compliant "
+    "subdivision of a site, add a 'Minimum compliant subdivision' section: "
+    "(1) state the site dimensions/area you are working from (image-derived or planner-supplied, "
+    "with the ESTIMATE/attribution rules above); "
+    "(2) list EVERY applicable standard found in CONTEXT — minimum lot size, minimum frontage, "
+    "front/side/rear setbacks, private open space, site coverage / building envelope, and access "
+    "(including any battle-axe access-strip width) — and cite each to its clause ID; "
+    "(3) using ONLY those cited standards, derive the minimum complying lot size(s), the required "
+    "frontage, the buildable envelope remaining after setbacks, and the indicative maximum number "
+    "of lots, SHOWING YOUR ARITHMETIC step by step; "
+    "(4) call out the binding constraint (the standard that limits yield) and any hazard/overlay "
+    "in CONTEXT that further constrains it. "
+    "CRITICAL: if a standard you need is NOT in CONTEXT, do NOT invent a figure — say which "
+    "standard/clause is missing and what value is required, so the planner can supply it. "
+    "Present all lot sizes, setbacks and yields as INDICATIVE estimates that a licensed surveyor "
+    "and the planning authority must confirm — this is a feasibility indication, not a sealed plan."
+)
 
 _CASELAW_SYSTEM = (
     "You are a Tasmanian planning law analyst. Analyse a planning tribunal decision and "
