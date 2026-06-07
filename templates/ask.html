@@ -15,8 +15,8 @@
   <div class="app-alert warning" style="margin-bottom:12px">No Gemini API key — Holly is offline.</div>
   {% endif %}
   <div class="form-group">
-    <textarea class="app-textarea" name="question" rows="3"
-      placeholder="e.g. What are the acceptable solutions for building height in the General Residential zone in Hobart? Or: Has TASCAT considered short-stay accommodation in residential zones?">{{ question }}</textarea>
+    <textarea class="app-textarea" name="question" rows="14" style="min-height:320px;resize:vertical"
+      placeholder="e.g. What are the acceptable solutions for building height in the General Residential zone in Hobart? Or: Has TASCAT considered short-stay accommodation in residential zones? (Paste long, detailed briefs here — drag the bottom-right corner to resize.)">{{ question }}</textarea>
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <div class="form-hint" style="margin:0">Holly retrieves relevant clauses and decisions automatically — no need to cite them yourself.</div>
@@ -36,6 +36,7 @@
       <div class="app-section-title">Holly</div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="app-badge info">Grounded · cited</span>
+        <button type="button" class="app-btn sm" onclick="copyText('.holly-answer', this)">Copy</button>
         <form method="POST" action="{{ url_for('ask_pdf') }}" style="margin:0" target="_blank">
           <textarea name="question" style="display:none">{{ question }}</textarea>
           <textarea name="answer" style="display:none">{{ answer }}</textarea>
@@ -115,11 +116,33 @@
             '<div class="app-card app-card-padded" style="min-height:220px;display:flex;' +
             'flex-direction:column;align-items:center;justify-content:center;gap:14px">' +
             '<span class="spin spin-lg"></span>' +
-            '<p class="text-faint" style="text-align:center;max-width:300px">' +
-            'Holly is reading the scheme clauses and TASCAT decisions…</p></div>';
+            '<p class="text-faint" style="text-align:center;max-width:320px">' +
+            'Holly is reading the scheme clauses and TASCAT decisions… ' +
+            'This is saved to History, so you can navigate away.</p></div>';
         }
       });
     });
   })();
+
+  // Copy the rendered answer text (clean, no markdown markers) to the clipboard.
+  function copyText(selector, btn) {
+    var el = document.querySelector(selector);
+    if (!el) return;
+    var text = el.innerText;
+    var done = function (ok) {
+      var label = btn.textContent;
+      btn.textContent = ok ? 'Copied!' : 'Copy failed';
+      setTimeout(function () { btn.textContent = label; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta); done(true);
+      } catch (e) { done(false); }
+    }
+  }
 </script>
 {% endblock %}

@@ -38,7 +38,7 @@
       <tr>
         <td style="font-size:12px;color:var(--text-faint);white-space:nowrap">{{ r.ts | dtshort }}</td>
         <td><span class="app-badge {{ 'info' if r.kind in ('ask','council') else '' }}">{{ kinds.get(r.kind, r.kind) }}</span></td>
-        <td><a href="{{ url_for('history_detail', rid=r.id) }}" style="color:var(--text-primary)">{{ r.title[:120] }}{% if r.title|length > 120 %}…{% endif %}</a></td>
+        <td><a href="{{ url_for('history_detail', rid=r.id) }}" style="color:var(--text-primary)">{{ r.title | stripmd | truncate(100, True, '…') }}</a></td>
         <td style="font-size:12px;color:var(--text-faint)">{{ r.user }}</td>
         <td style="text-align:right;white-space:nowrap"><a class="app-btn sm" href="{{ url_for('history_detail', rid=r.id) }}">Open</a></td>
       </tr>
