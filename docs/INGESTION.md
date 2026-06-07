@@ -195,6 +195,44 @@ discovered by probing `/{id}/init` and keeping those whose
 `planningSchemeTypeName` is `"Local Provisions Schedule"` (scheme id 30 is the
 SPP-only view and is skipped). Glenorchy alone yields ~690 LPS clauses.
 
+## Verifying subdivision standards are present
+
+The **Minimum compliant subdivision** capability (Ask Holly — see
+[SUBDIVISION.md](SUBDIVISION.md)) can only apply standards that have been
+ingested for the relevant municipality. If the corpus lacks the zone's
+subdivision standards, Holly correctly asks the planner to paste them rather than
+guess — but it is smoother to have them in the corpus first. Use this checklist
+after ingesting to confirm a zone is ready:
+
+1. **Check `/scheme` first.** Set the municipality, then search the zone plus
+   `minimum lot`, `frontage`, `setback`, `subdivision`. If the numbers appear,
+   each cited to a clause ID, the zone is ready. Standards live in
+   `scheme_chunks.json`: lot size / frontage / setbacks come from the **SPP** +
+   the relevant **zone code**, with particular-purpose-zone tweaks from the
+   **municipality's LPS**. `retrieve()` scopes to *statewide SPP + that
+   municipality's LPS*, so both layers must be present.
+2. **If missing or thin, re-ingest (SPP first, then LPS merges into it):**
+   ```bash
+   python -m ingest.scheme                # statewide SPP standards
+   python -m ingest.lps --discover        # id -> council map
+   python -m ingest.lps --scheme-id 15    # merge that council's LPS (repeatable)
+   gcloud storage cp data/scheme_chunks.json   gs://aus-town-planner-data/scheme_chunks.json   --project=aus-town-planner
+   gcloud storage cp data/scheme_manifest.json gs://aus-town-planner-data/scheme_manifest.json --project=aus-town-planner
+   ```
+   > Never run `ingest.lps --replace` for this — it overwrites
+   > `scheme_chunks.json` and drops the SPP. The default merge keeps the SPP and
+   > other councils.
+3. **Seed the leading TASCAT precedents** so the derivation has subdivision
+   authority to cite (see [Decisions](#decisions--ingestdecisionspy) above):
+   ```bash
+   python -m ingest.decisions --seed --merge
+   gcloud storage cp data/decisions.json gs://aus-town-planner-data/decisions.json --project=aus-town-planner
+   ```
+4. **Re-verify in `/scheme`.** Table-heavy standards (lot-size / density tables)
+   can be mangled when the SPP PDF is extracted and chunked — confirm the numbers
+   actually landed; don't assume. See the [curated supplement](#curated-supplement-always-available-clauses)
+   below for the last-resort backstop when a standard won't capture from source.
+
 ## Corpus status & the SAMPLE banner
 
 The repo's committed corpus is illustrative **SAMPLE** data (`provenance:
