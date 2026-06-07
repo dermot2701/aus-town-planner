@@ -101,9 +101,13 @@ def chunk_spp(text):
         start = m.end()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = _clean_body(text[start:end])
-        # Drop table-of-contents stubs: too short, or mostly page numbers.
+        # Drop table-of-contents stubs (short lines that are mostly page numbers)
+        # but KEEP longer number-heavy blocks — density, parking, multiple-dwelling
+        # and use-table standards are numeric and were being lost by a blanket filter.
         digit_ratio = sum(c.isdigit() for c in body) / max(len(body), 1)
-        if len(body) < 40 or digit_ratio > 0.4:
+        if len(body) < 40:
+            continue
+        if digit_ratio > 0.4 and len(body) < 200:
             continue
         # Keep the longest body seen for a clause id (real content beats the TOC).
         if cid not in best or len(body) > len(best[cid][1]):
