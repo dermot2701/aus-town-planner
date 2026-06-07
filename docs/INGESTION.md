@@ -70,9 +70,51 @@ python -m ingest.decisions --local-dir ~/Downloads/tascat --db tascat
 ### Leading precedents — `SEED_CITATIONS`
 
 A curated list of the most-cited TASCAT R&P authorities (e.g. Owens v Kingborough,
-the Robbins Island wind-farm appeal, Mt Wellington Cableway). They're fetched by
-direct `viewdoc` URL — this **bypasses AustLII's CAPTCHA-gated search endpoint**.
-Edit the list in `ingest/decisions.py` as the leading authorities evolve.
+the Robbins Island wind-farm appeal, Mt Wellington Cableway) plus recent
+2025–26 council appeals. They're fetched by direct `viewdoc` URL — this
+**bypasses AustLII's CAPTCHA-gated search endpoint**. Edit the list in
+`ingest/decisions.py` as the leading authorities evolve.
+
+> **Never invent a citation.** A seed entry is fetched by citation → URL, so a
+> wrong number silently ingests the *wrong* decision and mislabels it. Only add
+> citations confirmed against AustLII's own index — otherwise widen with the
+> year-crawl (`--db rmpat --year-from …`), which discovers real citations.
+
+### Quick start — ingest decisions with the key from Secret Manager
+
+In production the Gemini key lives in **Secret Manager** as the secret
+`GEMINI_API_KEY` (the same secret Cloud Run mounts). Pull it into the env var
+for the ingest run rather than pasting it — run this from the Mac mini (or any
+machine with `gcloud` auth and network access to AustLII):
+
+```bash
+cd ~/path/to/aus-town-planner
+git checkout main && git pull
+
+# Pull the Gemini key straight out of Secret Manager into the env var
+export GEMINI_API_KEY="$(gcloud secrets versions access latest \
+  --secret=GEMINI_API_KEY --project=aus-town-planner)"
+
+# Sanity check it loaded before spending time ingesting
+[ -n "$GEMINI_API_KEY" ] && echo "Key loaded (${#GEMINI_API_KEY} chars)" \
+  || { echo "Could not read GEMINI_API_KEY from Secret Manager"; exit 1; }
+
+# Ingest the curated leading cases (merges with existing corpus, dedup by citation)
+./venv/bin/python -m ingest.decisions --seed --merge
+
+# Push the result to production (deploys do NOT update GCS data)
+gcloud storage cp data/decisions.json gs://aus-town-planner-data/decisions.json \
+  --project=aus-town-planner
+```
+
+Then reload `/decisions` — new cases appear immediately, no redeploy needed.
+For depth, follow with a year-crawl using the same exported key, e.g.
+`./venv/bin/python -m ingest.decisions --db both --year-from 2010 --merge`.
+
+> Drop the `--project` flags if your `gcloud config` default project is already
+> `aus-town-planner`. If the secret lives in a different project, set
+> `--project` to that one. Confirm the secret name with
+> `gcloud secrets list --project=aus-town-planner --filter="name:GEMINI"`.
 
 ## Semantic index — `ingest/embed.py`
 
