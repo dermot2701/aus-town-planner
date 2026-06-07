@@ -81,6 +81,34 @@ def save_json(filename, data):
         json.dump(data, f, indent=2)
 
 
+# ── Binary blobs (image uploads) ──────────────────────────────────────────────
+# Kept separate from load_json/save_json, which are for structured data only.
+# Same GCS-vs-local switch, but bytes in/out and never JSON-encoded.
+
+def save_bytes(filename, data, content_type):
+    if GCS_BUCKET:
+        blob = _get_bucket().blob(filename)
+        blob.upload_from_string(data, content_type=content_type)
+        return
+    path = os.path.join(DATA_DIR, filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(data)
+
+
+def load_bytes(filename):
+    if GCS_BUCKET:
+        blob = _get_bucket().blob(filename)
+        if not blob.exists():
+            return None
+        return blob.download_as_bytes()
+    path = os.path.join(DATA_DIR, filename)
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        return f.read()
+
+
 # ── Auth ────────────────────────────────────────────────────────────────────
 
 def login_required(f):
@@ -204,9 +232,12 @@ _HISTORY_FILE = "history.json"
 _HISTORY_CAP = 1000
 
 
-def _record_run(kind, title, output, supplied=None, meta=None):
+def _record_run(kind, title, output, prompt=None, supplied=None, meta=None):
     """Append an AI run to the GCS-backed history. Best-effort: never break the
-    user flow if the write fails. Newest first, capped at _HISTORY_CAP."""
+    user flow if the write fails. Newest first, capped at _HISTORY_CAP.
+
+    `title` is a short excerpt for the list view; `prompt` is the full
+    question/input that produced the output, preserved for the detail view."""
     import uuid
     try:
         data = load_json(_HISTORY_FILE)
@@ -219,6 +250,7 @@ def _record_run(kind, title, output, supplied=None, meta=None):
             "user": session.get("user") or "—",
             "kind": kind,
             "title": (title or "").strip()[:200] or "(untitled)",
+            "prompt": (prompt if prompt is not None else (title or ""))[:20000],
             "output": output or "",
             "supplied": supplied or [],
             "meta": meta or {},
@@ -413,9 +445,11 @@ def _gemini_model(system=None):
             self.text = text
 
     class _Wrapper:
-        def generate_content(self, prompt):
+        def generate_content(self, prompt, images=None):
             import urllib.request as _ur
-            payload = {"contents": [{"parts": [{"text": prompt}]}],
+            # Multimodal: image parts (inlineData) come before the text prompt.
+            parts = (list(images) if images else []) + [{"text": prompt}]
+            payload = {"contents": [{"parts": parts}],
                        # Disable thinking: gemini-2.5-flash counts reasoning tokens
                        # against the output budget and was truncating long answers.
                        "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.7,
@@ -940,7 +974,10 @@ def api_review():
     result, _ctx, engine = review_proposal(proposal)
     _title = (proposal.get("description") or
               " ".join(str(proposal.get(k, "")) for k in ("municipality", "zone", "use_class")).strip())
-    _record_run("review", _title, json.dumps(result, indent=2),
+    _prompt = "\n".join(f"{k.replace('_', ' ').title()}: {v}"
+                        for k in ("municipality", "pid", "zone", "use_class", "description")
+                        if (v := str(proposal.get(k, "")).strip()))
+    _record_run("review", _title, json.dumps(result, indent=2), prompt=_prompt,
                 meta={"engine": engine, "proposal": proposal})
     return jsonify({"engine": engine, "result": result})
 
@@ -966,6 +1003,17 @@ _HOLLY_SYSTEM = (
 _HOLLY_SYSTEM += (
     " If you state a date (e.g. a report date), use the current date supplied in the "
     "prompt — never invent, guess, or use a date from your training data."
+)
+_HOLLY_SYSTEM += (
+    " The planner may attach images — site plans, architectural drawings, survey plans, or "
+    "map/aerial screenshots. When images are present, FIRST report what you can actually "
+    "observe under a short 'Image observations' heading: dimensions, scale bars, lot "
+    "boundaries, setbacks, labels, north arrows, number of storeys or dwellings. Mark anything "
+    "you infer or scale off without a stated scale bar explicitly as an ESTIMATE, and say "
+    "plainly when something is not legible or no scale is shown — never guess a measurement. "
+    "Treat image-derived facts exactly like planner-supplied facts: they are inputs to the "
+    "assessment, attributed as '(image-derived)', and are NOT corpus citations. Then assess the "
+    "question against the ingested scheme clauses and TASCAT decisions as usual."
 )
 
 _CASELAW_SYSTEM = (
@@ -1168,7 +1216,7 @@ def ask_holly():
                     answer = resp.text.strip()
                     # Persist immediately — before the (slower) follow-up step — so the
                     # answer survives in History even if the user navigates away.
-                    _record_run("ask", question, answer, supplied=supplied,
+                    _record_run("ask", question, answer, prompt=question, supplied=supplied,
                                 meta={"municipality": muni, "zone": _detect_zone(question)})
                     if _is_insufficient(answer):
                         follow_ups = _holly_followups(question, answer)
@@ -1318,7 +1366,7 @@ def council_stream():
         yield sse({"type": "stage_complete", "stage": 3})
         yield sse({"type": "council_complete"})
         _log("council.done", final_chars=len(final))   # server reached the end
-        _record_run("council", question, final,
+        _record_run("council", question, final, prompt=question,
                     meta={"members": list(active.keys()),
                           "municipality": muni, "zone": _detect_zone(question)})
 
@@ -1358,6 +1406,7 @@ def caselaw():
                     _record_run("caselaw",
                                 review.get("case_name") or review.get("citation") or citation,
                                 json.dumps(review, indent=2),
+                                prompt=(f"Citation: {citation}\n\n" if citation else "") + case_text,
                                 meta={"citation": review.get("citation") or citation})
                 except Exception as e:
                     error = f"Analysis failed: {e}"
@@ -1406,7 +1455,8 @@ def history_pdf(rid):
     run = next((r for r in (load_json(_HISTORY_FILE) or {}).get("runs", []) if r.get("id") == rid), None)
     if not run:
         abort(404)
-    pdf = _report_pdf(run.get("title", ""), run.get("output", ""), run.get("supplied"))
+    pdf = _report_pdf(run.get("prompt") or run.get("title", ""),
+                      run.get("output", ""), run.get("supplied"))
     return Response(pdf, mimetype="application/pdf", headers={
         "Content-Disposition": f'attachment; filename="tasplan-{run.get("kind", "run")}-{rid}.pdf"'})
 
