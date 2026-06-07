@@ -1278,6 +1278,21 @@ def ask_holly():
     follow_ups = []
     supplied = []
     image_refs = []
+    continued_from = None
+    if request.method == "GET" and request.args.get("from"):
+        # Continue working on a prior run: pre-load its question, planner-supplied
+        # context and attached images so the planner can add to it and re-ask. The
+        # re-ask is saved as a new History entry — the original run is untouched.
+        run = next((r for r in (load_json(_HISTORY_FILE) or {}).get("runs", [])
+                    if r.get("id") == request.args["from"]), None)
+        if run:
+            question = run.get("prompt") or run.get("title") or ""
+            supplied = [p for p in (run.get("supplied") or [])
+                        if isinstance(p, dict)]
+            image_refs = [img for img in ((run.get("meta") or {}).get("images") or [])
+                          if isinstance(img, dict)
+                          and _UPLOAD_NAME_RE.match(str(img.get("key", "")).split("/")[-1])]
+            continued_from = run.get("id")
     if request.method == "POST":
         question = request.form.get("question", "").strip()
         supplied = _collect_supplied()
@@ -1336,7 +1351,8 @@ def ask_holly():
     return render_template("ask.html", question=question, answer=answer, error=error,
                            follow_ups=follow_ups, supplied=supplied,
                            supplied_json=json.dumps(supplied), images=image_refs,
-                           images_json=json.dumps(image_refs), gemini=bool(GEMINI_API_KEY))
+                           images_json=json.dumps(image_refs), continued_from=continued_from,
+                           gemini=bool(GEMINI_API_KEY))
 
 
 @app.route("/ask/pdf", methods=["POST"])
