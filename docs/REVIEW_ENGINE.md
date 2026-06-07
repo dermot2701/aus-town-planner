@@ -105,7 +105,11 @@ which instructs Holly to answer **only** from the supplied clauses/decisions,
 name the zone each cited clause governs, and never apply a standard from a
 different zone. With no Gemini key, Holly is offline (the form is disabled).
 Retrieval and answer/error events are logged as `ask.retrieve` / `ask.answer` /
-`ask.error`. The client shows a spinner during the synchronous POST.
+`ask.error`. The client shows a spinner during the synchronous POST. The page is
+laid out like the Council — full-width question on top, full-width answer below —
+and the answer is rendered through the **`mdlite`** Jinja filter (`_md_lite` in
+`main.py`), which escapes HTML first then applies the same safe markdown subset
+(bold, headings, bullets, dividers) as the council's client-side renderer.
 
 The same `retrieve()` + grounding rules power the **Planning Council** — see
 [COUNCIL.md](COUNCIL.md).

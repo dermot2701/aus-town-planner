@@ -159,6 +159,22 @@ def _no_store_html(resp):
     return resp
 
 
+def _md_lite(text):
+    """Render a safe subset of markdown for server-rendered answers (Ask Holly):
+    escape HTML first, then add only our own tags — the same transforms as the
+    council's client-side mdLite, so model output can't inject HTML."""
+    from markupsafe import Markup, escape
+    t = str(escape(text or ""))
+    t = re.sub(r"(?m)^\s*([-*_])\1{2,}\s*$", '<hr class="md-rule">', t)  # --- → divider
+    t = re.sub(r"(?m)^#{1,6}\s+(.*)$", r"<strong>\1</strong>", t)        # headings → bold
+    t = re.sub(r"\*\*([^*\n]+)\*\*", r"<strong>\1</strong>", t)          # **bold**
+    t = re.sub(r"(?m)^(\s*)[*\-]\s+", r"\1• ", t)                        # -/* bullets → •
+    return Markup(t)
+
+
+app.jinja_env.filters["mdlite"] = _md_lite
+
+
 # ── Gemini factory ────────────────────────────────────────────────────────────
 # Single source of truth for the model. gemini-2.5-flash only. Responses are
 # prose; always extract JSON via re.search(r'\{.*\}', text, re.DOTALL).
