@@ -4,3 +4,4 @@ gunicorn==22.0.0
 google-cloud-storage==2.18.2
 tzdata==2024.1
 pdfminer.six==20240706  # SPP PDF text extraction (ingest/scheme.py)
+fpdf2==2.8.1             # PDF export of Holly assessments (main.py _report_pdf)

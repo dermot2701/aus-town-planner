@@ -34,10 +34,50 @@
   <div class="app-card app-card-padded">
     <div class="app-card-header">
       <div class="app-section-title">Holly</div>
-      <span class="app-badge info">Grounded · cited</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="app-badge info">Grounded · cited</span>
+        <form method="POST" action="{{ url_for('ask_pdf') }}" style="margin:0" target="_blank">
+          <textarea name="question" style="display:none">{{ question }}</textarea>
+          <textarea name="answer" style="display:none">{{ answer }}</textarea>
+          <input type="hidden" name="supplied" value="{{ supplied_json }}">
+          <button type="submit" class="app-btn sm">Download PDF</button>
+        </form>
+      </div>
     </div>
     <div class="holly-answer">{{ answer | mdlite }}</div>
   </div>
+
+  {% if supplied %}
+  <div class="app-card app-card-padded" style="margin-top:16px">
+    <div class="app-card-header"><div class="app-section-title">Context you provided</div></div>
+    <div style="font-size:12px;color:var(--text-faint);line-height:1.6">
+      {% for p in supplied %}
+      <div style="margin-bottom:8px"><span style="color:var(--text-secondary)">{{ p.q }}</span><br>{{ p.a }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if follow_ups %}
+  <form id="refineForm" method="POST" action="{{ url_for('ask_holly') }}" class="app-card app-card-padded" style="margin-top:16px">
+    <div class="app-card-header"><div class="app-section-title">Help Holly refine this</div></div>
+    <p class="form-hint" style="margin-top:0;margin-bottom:14px">
+      Holly flagged gaps. Answer any of these to sharpen the assessment — give a fact, or
+      <strong>paste the relevant clause text</strong> if it wasn't in the corpus. Blank answers are ignored.
+    </p>
+    <textarea name="question" style="display:none">{{ question }}</textarea>
+    <input type="hidden" name="supplied" value="{{ supplied_json }}">
+    {% for q in follow_ups %}
+    <div class="form-group">
+      <label class="form-label">{{ q }}</label>
+      <input type="hidden" name="fu_question" value="{{ q }}">
+      <textarea class="app-textarea" name="fu_answer" rows="2" placeholder="Your answer, or paste the clause text…"></textarea>
+    </div>
+    {% endfor %}
+    <button id="refineBtn" type="submit" class="app-btn primary lg" style="white-space:nowrap">Refine with Holly</button>
+  </form>
+  {% endif %}
+
   {% else %}
   <div class="app-card app-card-padded" style="min-height:220px;display:flex;align-items:center;justify-content:center">
     <p class="text-faint" style="text-align:center;max-width:440px">
@@ -58,22 +98,27 @@
 </style>
 <script>
   (function () {
-    var form = document.getElementById('askForm');
-    if (!form) return;
-    form.addEventListener('submit', function () {
-      var ta = form.querySelector('textarea[name=question]');
-      if (!ta || !ta.value.trim()) return;            // nothing to ask
-      var btn = document.getElementById('askBtn');
-      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Asking Holly…'; }
-      var col = document.getElementById('answerCol');
-      if (col) {
-        col.innerHTML =
-          '<div class="app-card app-card-padded" style="min-height:220px;display:flex;' +
-          'flex-direction:column;align-items:center;justify-content:center;gap:14px">' +
-          '<span class="spin spin-lg"></span>' +
-          '<p class="text-faint" style="text-align:center;max-width:280px">' +
-          'Holly is reading the scheme clauses and TASCAT decisions…</p></div>';
-      }
+    // Spinner for the ask + refine forms (not the PDF download form).
+    ['askForm', 'refineForm'].forEach(function (id) {
+      var form = document.getElementById(id);
+      if (!form) return;
+      form.addEventListener('submit', function () {
+        if (id === 'askForm') {
+          var ta = form.querySelector('textarea[name=question]');
+          if (!ta || !ta.value.trim()) return;
+        }
+        var btn = form.querySelector('button[type=submit]');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Holly is thinking…'; }
+        var col = document.getElementById('answerCol');
+        if (col) {
+          col.innerHTML =
+            '<div class="app-card app-card-padded" style="min-height:220px;display:flex;' +
+            'flex-direction:column;align-items:center;justify-content:center;gap:14px">' +
+            '<span class="spin spin-lg"></span>' +
+            '<p class="text-faint" style="text-align:center;max-width:300px">' +
+            'Holly is reading the scheme clauses and TASCAT decisions…</p></div>';
+        }
+      });
     });
   })();
 </script>

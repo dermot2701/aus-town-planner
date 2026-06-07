@@ -373,7 +373,10 @@ def _gemini_model(system=None):
         def generate_content(self, prompt):
             import urllib.request as _ur
             payload = {"contents": [{"parts": [{"text": prompt}]}],
-                       "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.7}}
+                       # Disable thinking: gemini-2.5-flash counts reasoning tokens
+                       # against the output budget and was truncating long answers.
+                       "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.7,
+                                            "thinkingConfig": {"thinkingBudget": 0}}}
             if instruction:
                 payload["system_instruction"] = {"parts": [{"text": instruction}]}
             req = _ur.Request(
@@ -876,6 +879,11 @@ _HOLLY_SYSTEM = (
     "cited clause governs; never apply a standard from a different zone. "
     "If the context is insufficient, say so clearly and explain what information is needed. "
     "Never invent clause numbers, standards, or case holdings. "
+    "You may also receive ADDITIONAL CONTEXT SUPPLIED BY THE PLANNER. Treat any facts there "
+    "as established facts about the proposal. If it includes clause or standard text the "
+    "planner has pasted, you may rely on and quote it, but you MUST attribute it explicitly as "
+    "'(planner-supplied)' and keep it distinct from the ingested scheme corpus — never present "
+    "planner-supplied text as if it were a verified corpus citation, and still never invent anything. "
     "End every response with the caveat: '" + CAVEAT + "'"
 )
 
@@ -897,11 +905,145 @@ _CASELAW_SYSTEM = (
 )
 
 
+_FOLLOWUP_SYSTEM = (
+    "You help a Tasmanian planning assistant gather the information it is missing. "
+    "Given a planning question and the assistant's assessment, identify the specific things "
+    "that—if the planner provided them—would let the assistant give a more definitive, "
+    "better-grounded answer. Prefer concrete proposal/site facts (e.g. lot frontage width, "
+    "site slope, number of dwellings, parking spaces provided, lot area). Where the assessment "
+    "stated a clause or standard was missing from its corpus, include a question inviting the "
+    "planner to paste that specific clause's text. Each question must be specific and answerable "
+    "in a sentence or a pasted clause. Return ONLY a JSON array of question strings, max 6, no prose."
+)
+
+_INSUFFICIENT_MARKERS = (
+    "insufficient", "is insufficient", "not provided in", "context does not",
+    "not been provided", "unable to determine", "not provided in the context",
+)
+
+
+def _is_insufficient(answer):
+    a = (answer or "").lower()
+    return any(m in a for m in _INSUFFICIENT_MARKERS)
+
+
+def _holly_followups(question, answer):
+    """Ask Gemini for specific follow-up questions that would sharpen the answer."""
+    model = _gemini_model(system=_FOLLOWUP_SYSTEM)
+    if not model:
+        return []
+    try:
+        resp = model.generate_content(
+            f"QUESTION:\n{question}\n\nASSESSMENT:\n{(answer or '')[:6000]}\n\nReturn the JSON array.")
+        m = re.search(r"\[.*\]", resp.text, re.DOTALL)
+        if not m:
+            return []
+        items = json.loads(m.group())
+        return [str(q).strip() for q in items if str(q).strip()][:6]
+    except Exception as e:
+        _log("ask.followup_error", error=str(e)[:200])
+        return []
+
+
+def _pdf_safe(s):
+    """Map common non-Latin-1 glyphs to ASCII so fpdf2 core fonts can render them."""
+    repl = {"•": "-", "–": "-", "—": "-", "‘": "'", "’": "'",
+            "“": '"', "”": '"', "…": "...", "→": "->", "≥": ">=",
+            "≤": "<=", " ": " "}
+    s = "".join(repl.get(ch, ch) for ch in str(s or ""))
+    return s.encode("latin-1", "replace").decode("latin-1")
+
+
+def _pdf_cell(pdf, h, text, **kw):
+    """multi_cell that always advances to the next line at the left margin."""
+    pdf.multi_cell(0, h, text, new_x="LMARGIN", new_y="NEXT", **kw)
+
+
+def _pdf_render_markdown(pdf, text):
+    """Render Holly's markdown-ish answer into the PDF, line by line."""
+    for raw in (text or "").split("\n"):
+        s = raw.strip()
+        if not s:
+            pdf.ln(2)
+            continue
+        if re.match(r"^([-*_])\1{2,}$", s):                       # --- divider
+            y = pdf.get_y() + 1
+            pdf.line(pdf.l_margin, y, pdf.w - pdf.r_margin, y)
+            pdf.ln(3)
+        elif re.match(r"^#{1,6}\s+", s):                          # heading
+            pdf.set_font("Helvetica", "B", 11)
+            _pdf_cell(pdf, 6, _pdf_safe(re.sub(r"^#{1,6}\s+", "", s)))
+            pdf.set_font("Helvetica", "", 10)
+        elif re.match(r"^[-*]\s+", s):                            # bullet
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_x(pdf.l_margin + 5)
+            _pdf_cell(pdf, 5, _pdf_safe("- " + re.sub(r"^[-*]\s+", "", s)), markdown=True)
+        else:                                                     # paragraph
+            pdf.set_font("Helvetica", "", 10)
+            _pdf_cell(pdf, 5, _pdf_safe(s), markdown=True)
+
+
+def _report_pdf(question, answer, supplied=None):
+    """Build a downloadable PDF of a Holly assessment. fpdf2 is pure-Python."""
+    from fpdf import FPDF
+    pdf = FPDF(format="A4")
+    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.set_margins(18, 16, 18)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    _pdf_cell(pdf, 8, "TasPlan Review - Holly Assessment")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(110)
+    _pdf_cell(pdf, 5, _pdf_safe("Generated " + datetime.now(tz=TAS).strftime("%d %b %Y, %H:%M")))
+    pdf.set_text_color(0)
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 11)
+    _pdf_cell(pdf, 6, "Question")
+    pdf.set_font("Helvetica", "", 10)
+    _pdf_cell(pdf, 5, _pdf_safe(question))
+    pdf.ln(2)
+    if supplied:
+        pdf.set_font("Helvetica", "B", 11)
+        _pdf_cell(pdf, 6, "Planner-supplied context")
+        pdf.set_font("Helvetica", "", 10)
+        for p in supplied:
+            _pdf_cell(pdf, 5, _pdf_safe("Q: " + p.get("q", "")))
+            _pdf_cell(pdf, 5, _pdf_safe("A: " + p.get("a", "")))
+            pdf.ln(1)
+    pdf.ln(1)
+    pdf.set_font("Helvetica", "B", 12)
+    _pdf_cell(pdf, 7, "Assessment")
+    pdf.ln(1)
+    _pdf_render_markdown(pdf, answer)
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(110)
+    _pdf_cell(pdf, 4, _pdf_safe(CAVEAT))
+    return bytes(pdf.output())
+
+
 @app.route("/skills")
 @login_required
 def skills():
     content = load_json("skills.json")
     return render_template("skills.html", content=content)
+
+
+def _collect_supplied():
+    """Merge previously-supplied context (carried as JSON) with any newly-answered
+    follow-up questions from the refine form. Returns a list of {q, a} dicts."""
+    supplied = []
+    try:
+        prior = json.loads(request.form.get("supplied") or "[]")
+        if isinstance(prior, list):
+            supplied = [{"q": str(p.get("q", "")), "a": str(p.get("a", ""))}
+                        for p in prior if isinstance(p, dict) and str(p.get("a", "")).strip()]
+    except (ValueError, TypeError):
+        supplied = []
+    for q, a in zip(request.form.getlist("fu_question"), request.form.getlist("fu_answer")):
+        if (a or "").strip():
+            supplied.append({"q": (q or "").strip(), "a": a.strip()})
+    return supplied
 
 
 @app.route("/ask", methods=["GET", "POST"])
@@ -910,35 +1052,69 @@ def ask_holly():
     answer = None
     question = ""
     error = None
+    follow_ups = []
+    supplied = []
     if request.method == "POST":
         question = request.form.get("question", "").strip()
+        supplied = _collect_supplied()
         if question:
             t0 = time.time()
             muni = _detect_municipality(question)
             ctx = retrieve(query=question, municipality=muni, k_scheme=12)
             _log("ask.retrieve", question=question[:200], municipality=muni,
-                 zone=_detect_zone(question),
+                 zone=_detect_zone(question), supplied=len(supplied),
                  scheme_clauses=[c.get("clause_id") for c in ctx["scheme"]],
                  decisions=[d.get("citation") for d in ctx["decisions"]],
                  passages=len(ctx.get("decision_passages") or []))
             model = _gemini_model(system=_HOLLY_SYSTEM)
             if model:
+                supplied_block = ""
+                if supplied:
+                    supplied_block = (
+                        "\n\nADDITIONAL CONTEXT SUPPLIED BY THE PLANNER "
+                        "(facts are established; any clause text here is planner-supplied — "
+                        "attribute it as '(planner-supplied)', distinct from the corpus):\n"
+                        + "\n".join(f"- Q: {p['q']}\n  A: {p['a']}" for p in supplied))
                 prompt = (
                     f"{_skills_context()}\n\n"
-                    f"CONTEXT (scheme clauses and decisions — cite only these):\n{_format_context(ctx)}\n\n"
+                    f"CONTEXT (scheme clauses and decisions — cite only these):\n{_format_context(ctx)}"
+                    f"{supplied_block}\n\n"
                     f"QUESTION: {question}"
                 )
                 try:
                     resp = model.generate_content(prompt)
                     answer = resp.text.strip()
-                    _log("ask.answer", chars=len(answer), latency_s=round(time.time() - t0, 2))
+                    if _is_insufficient(answer):
+                        follow_ups = _holly_followups(question, answer)
+                    _log("ask.answer", chars=len(answer), supplied=len(supplied),
+                         follow_ups=len(follow_ups), latency_s=round(time.time() - t0, 2))
                 except Exception as e:
                     error = f"Gemini error: {e}"
                     _log("ask.error", error=str(e)[:300], latency_s=round(time.time() - t0, 2))
             else:
                 error = "No Gemini API key configured — Holly requires Gemini to answer questions."
     return render_template("ask.html", question=question, answer=answer, error=error,
-                           gemini=bool(GEMINI_API_KEY))
+                           follow_ups=follow_ups, supplied=supplied,
+                           supplied_json=json.dumps(supplied), gemini=bool(GEMINI_API_KEY))
+
+
+@app.route("/ask/pdf", methods=["POST"])
+@login_required
+def ask_pdf():
+    question = request.form.get("question", "")
+    answer = request.form.get("answer", "")
+    try:
+        supplied = json.loads(request.form.get("supplied") or "[]")
+        if not isinstance(supplied, list):
+            supplied = []
+    except (ValueError, TypeError):
+        supplied = []
+    if not answer.strip():
+        return redirect(url_for("ask_holly"))
+    from flask import Response
+    pdf = _report_pdf(question, answer, supplied)
+    return Response(pdf, mimetype="application/pdf", headers={
+        "Content-Disposition": 'attachment; filename="holly-assessment.pdf"'})
 
 
 @app.route("/council")
