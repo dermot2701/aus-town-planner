@@ -10,6 +10,7 @@ Developer documentation for the Tasmanian planning assessment assistant.
 | [COUNCIL.md](COUNCIL.md) | Planning Council — the 3-stage multi-LLM debate, provider config, the page layout/SSE client, and every known provider failure mode with its fix (Groq Cloudflare 1010, MiniMax host) |
 | [INGESTION.md](INGESTION.md) | Building the corpus — scheme clauses (SPP + LPS), TASCAT decisions, the semantic index, SAMPLE→LIVE provenance |
 | [SETUP.md](SETUP.md) | Local dev and Cloud Run deployment |
+| [WORKERS.md](WORKERS.md) | The Surity360 "workers" standard & registry — the portable contract (data/tenancy/grounding/audit + dev→prod) every worker repo mirrors. See also [`../strategy-and-marketing/why-surity360-is-a-product.md`](../strategy-and-marketing/why-surity360-is-a-product.md) |
 
 ## The one-paragraph version
 
